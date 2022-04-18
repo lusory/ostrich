@@ -6,5 +6,7 @@ data class ReaderItem(
     val file: String,
     val name: String,
     val doc: String,
-    var json: JsonNode? = null
+    var json: JsonNode? = null,
+    var schemaName: String? = null,
+    var schemaType: String? = null
 )

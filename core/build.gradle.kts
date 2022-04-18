@@ -1,28 +1,28 @@
 import me.lusory.ostrich.gen.Generator
 
-sourceSets.create("generated") {
-    java {
-        srcDir("${project.buildDir}/generated/java")
-    }
-}
+val sourcesWorkingDir: File = file("build/qemu")
+val qapiWorkingDir: File = file("build/qemu/qapi")
+val generatedSourceDir: File = file("src/generated")
+
+sourceSets.create("generated")
 
 tasks.register("pullQemuSources") {
-    val workingDir: File = file("${project.buildDir}/qemu")
+    outputs.dir(sourcesWorkingDir)
 
-    outputs.dir(workingDir)
+    outputs.upToDateWhen { sourcesWorkingDir.isDirectory }
 
     doFirst {
-        workingDir.deleteRecursively()
-        workingDir.mkdirs()
+        sourcesWorkingDir.deleteRecursively()
+        sourcesWorkingDir.mkdirs()
     }
     doLast {
         exec {
-            this.workingDir = workingDir
+            workingDir = sourcesWorkingDir
 
             commandLine = listOf("git", "clone", "--branch", "master", "--no-checkout", "--depth=1", "https://github.com/qemu/qemu.git", ".")
         }
         exec {
-            this.workingDir = workingDir
+            this.workingDir = sourcesWorkingDir
 
             commandLine = listOf("git", "checkout", "master", "*.json")
         }
@@ -30,10 +30,9 @@ tasks.register("pullQemuSources") {
 }
 
 tasks.register("cleanQemuSources") {
-    val workingDir: File = file("${project.buildDir}/qemu")
-
     doLast {
-        workingDir.deleteRecursively()
+        sourcesWorkingDir.deleteRecursively()
+        generatedSourceDir.deleteRecursively()
     }
 }
 
@@ -41,9 +40,12 @@ tasks.getByName("clean").dependsOn("cleanQemuSources")
 
 tasks.register("generateQapiModels") {
     dependsOn("pullQemuSources")
-    val workingDir: File = file("${project.buildDir}/qemu/qapi")
 
+    doFirst {
+        generatedSourceDir.deleteRecursively()
+    }
     doLast {
-        Generator(workingDir.walkTopDown().filter { it.isFile }.toList(), sourceSets["generated"].java.srcDirs.first()).readers.forEach { println(it) }
+        Generator(qapiWorkingDir.walkTopDown().filter { it.isFile }.toList(), sourceSets["generated"].java.srcDirs.first())
+            .generate()
     }
 }
