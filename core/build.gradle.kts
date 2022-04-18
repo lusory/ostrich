@@ -1,10 +1,19 @@
 import me.lusory.ostrich.gen.Generator
+import me.lusory.ostrich.gradle.DependencyVersions
+
+dependencies {
+    compileOnly(group = "org.jetbrains", name = "annotations", version = DependencyVersions.JB_ANNOTATIONS)
+}
 
 val sourcesWorkingDir: File = file("build/qemu")
 val qapiWorkingDir: File = file("build/qemu/qapi")
-val generatedSourceDir: File = file("src/generated")
+val generatedSourceDir: File = file("build/generated/main/java")
 
-sourceSets.create("generated")
+sourceSets.main {
+    java {
+        srcDir(generatedSourceDir)
+    }
+}
 
 tasks.register("pullQemuSources") {
     outputs.dir(sourcesWorkingDir)
@@ -45,7 +54,7 @@ tasks.register("generateQapiModels") {
         generatedSourceDir.deleteRecursively()
     }
     doLast {
-        Generator(qapiWorkingDir.walkTopDown().filter { it.isFile }.toList(), sourceSets["generated"].java.srcDirs.first())
+        Generator(qapiWorkingDir.walkTopDown().filter { it.isFile }.toList(), generatedSourceDir)
             .generate()
     }
 }

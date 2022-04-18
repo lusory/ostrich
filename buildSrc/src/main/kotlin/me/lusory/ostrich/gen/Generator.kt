@@ -5,13 +5,11 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jsonMapper
 import com.fasterxml.jackson.module.kotlin.kotlinModule
-import com.squareup.javapoet.ClassName
-import com.squareup.javapoet.JavaFile
-import com.squareup.javapoet.MethodSpec
-import com.squareup.javapoet.TypeSpec
+import com.squareup.javapoet.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
+import java.util.*
 import javax.lang.model.element.Modifier
 
 class Generator(files: List<File>, private val sourceDir: File) {
@@ -79,6 +77,9 @@ class Generator(files: List<File>, private val sourceDir: File) {
             "while"
         )
         private val TYPE_REF_REGEX = Regex("@([a-zA-Z]+)")
+
+        private val NULLABLE: AnnotationSpec = AnnotationSpec.builder(ClassName.get("org.jetbrains.annotations", "Nullable")).build()
+        private val UNMODIFIABLE: AnnotationSpec = AnnotationSpec.builder(ClassName.get("org.jetbrains.annotations", "Unmodifiable")).build()
 
         private val MAPPER: ObjectMapper = jsonMapper {
             addModule(kotlinModule())
@@ -156,14 +157,45 @@ class Generator(files: List<File>, private val sourceDir: File) {
             var builder: TypeSpec.Builder
             if (item.schemaType == "enum") {
                 builder = TypeSpec.enumBuilder(className)
+                    .addSuperinterface(ClassName.get("me.lusory.ostrich.qapi", "QEnum"))
+                    .addField(java.lang.String::class.java, "_if", Modifier.PRIVATE, Modifier.FINAL)
+                    .addField(ParameterizedTypeName.get(java.util.List::class.java, java.lang.String::class.java), "features", Modifier.PRIVATE, Modifier.FINAL)
+                    .addMethod(
+                        MethodSpec.constructorBuilder()
+                            .addParameter(java.lang.String::class.java, "_if")
+                            .addParameter(ArrayTypeName.of(java.lang.String::class.java), "features")
+                            .varargs()
+                            .addStatement("this._if = _if")
+                            .addStatement("this.features = \$T.asList(features)", Arrays::class.java)
+                            .build()
+                    )
+                    .addMethod(
+                        MethodSpec.methodBuilder("getIf")
+                            .addModifiers(Modifier.PUBLIC)
+                            .addAnnotation(Override::class.java)
+                            .addAnnotation(NULLABLE)
+                            .returns(java.lang.String::class.java)
+                            .addStatement("return _if")
+                            .build()
+                    )
+                    .addMethod(
+                        MethodSpec.methodBuilder("getFeatures")
+                            .addModifiers(Modifier.PUBLIC)
+                            .addAnnotation(Override::class.java)
+                            .addAnnotation(UNMODIFIABLE)
+                            .returns(ParameterizedTypeName.get(java.util.List::class.java, java.lang.String::class.java))
+                            .addStatement("return features")
+                            .build()
+                    )
 
                 item.json!!.get("data").forEach { node ->
                     val textifiedNode: String = if (node.isTextual) node.asText() else node.get("name").asText()
                     val ifAttribute: String? = node.get("if")?.asText()
+                    val featuresAttribute: List<String> = node.get("features")?.map(JsonNode::asText) ?: listOf()
 
                     builder.addEnumConstant(
                         textifiedNode.toUpperCase().replaceReservedKeywords(),
-                        TypeSpec.anonymousClassBuilder("")
+                        TypeSpec.anonymousClassBuilder("\$L", CodeBlock.join(mutableListOf(CodeBlock.of("\$S", ifAttribute)).also { it.addAll(featuresAttribute.map { e -> CodeBlock.of("\$S", e) }) }, ", "))
                             .addMethod(
                                 MethodSpec.methodBuilder("toString")
                                     .addAnnotation(Override::class.java)
@@ -172,11 +204,6 @@ class Generator(files: List<File>, private val sourceDir: File) {
                                     .returns(String::class.java)
                                     .build()
                             )
-                            .also { constBuilder ->
-                                if (ifAttribute != null) {
-                                    constBuilder.addJavadoc("If: $ifAttribute")
-                                }
-                            }
                             .build()
                     )
                 }
