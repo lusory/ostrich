@@ -245,7 +245,6 @@ class Generator(files: List<File>, private val sourceDir: File) {
         get() = when {
             has("command") -> "command"
             has("struct") -> "struct"
-            has("type") -> "type"
             has("enum") -> "enum"
             has("union") -> "union"
             has("alternate") -> "alternate"
