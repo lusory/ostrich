@@ -1,4 +1,4 @@
-package me.lusory.ostrich.gen
+package me.lusory.ostrich.gen.model
 
 enum class SchemaType {
     COMMAND,

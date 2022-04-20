@@ -1,12 +1,7 @@
 package me.lusory.ostrich.gen
 
-import me.lusory.ostrich.gen.model.Enum0
-import me.lusory.ostrich.gen.model.Feature
-import me.lusory.ostrich.gen.model.PragmaDirective
-import me.lusory.ostrich.gen.model.IncludeDirective
-import me.lusory.ostrich.gen.model.Condition
 import com.fasterxml.jackson.databind.JsonNode
-import me.lusory.ostrich.gen.model.ConditionType
+import me.lusory.ostrich.gen.model.*
 import kotlin.reflect.KClass
 
 // https://www.qemu.org/docs/master/devel/qapi-code-gen.html#schema-syntax
@@ -86,7 +81,25 @@ fun parseFeature(node: JsonNode): Feature = when {
 
 fun parseFeatures(node: JsonNode): List<Feature> = node.get("features")?.map { parseFeature(it) } ?: listOf()
 
-fun parseEnum(node: JsonNode): Enum0? = Enum0(
-    name = node.get("enum")?.asText() ?: throw IllegalArgumentException("Malformed enum"),
-    data = listOf() // TODO: finish this
-)
+fun parseEnumValue(node: JsonNode): EnumValue = when {
+    node.isTextual -> EnumValue(name = node.asText())
+    node.has("name") -> EnumValue(
+        name = node.get("name").asText(),
+        `if` = parseCondition(node),
+        features = parseFeatures(node)
+    )
+    else -> throw IllegalArgumentException("Malformed enum value")
+}
+
+fun parseEnumValues(node: JsonNode): List<EnumValue> = node.get("data")?.map { parseEnumValue(it) } ?: listOf()
+
+fun parseEnum(node: JsonNode, docString: (String?) -> String? = { null }): Enum0? = node.get("enum")?.asText()?.let { enumName ->
+    Enum0(
+        name = enumName,
+        docString = docString(enumName),
+        data = parseEnumValues(node),
+        prefix = node.get("prefix")?.asText(),
+        `if` = parseCondition(node),
+        features = parseFeatures(node)
+    )
+}

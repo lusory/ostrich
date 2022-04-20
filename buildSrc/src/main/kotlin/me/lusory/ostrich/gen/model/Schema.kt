@@ -1,3 +1,5 @@
 package me.lusory.ostrich.gen.model
 
-interface Schema
+interface Schema {
+    val docString: String?
+}

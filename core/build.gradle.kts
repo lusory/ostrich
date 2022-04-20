@@ -55,6 +55,5 @@ tasks.register("generateQapiModels") {
     }
     doLast {
         Generator(qapiWorkingDir.walkTopDown().filter { it.isFile }.toList(), generatedSourceDir)
-            .generate()
     }
 }
