@@ -1,17 +1,17 @@
 package me.lusory.ostrich.gen.model
 
-// https://www.qemu.org/docs/master/devel/qapi-code-gen.html#enumeration-types
-data class Enum0 (
+// https://www.qemu.org/docs/master/devel/qapi-code-gen.html#struct-types
+data class Struct(
     override val name: String,
-    val data: List<EnumValue>,
-    val prefix: String? = null,
+    val data: Map<String, StructMember>,
+    val base: String? = null,
     val `if`: Condition? = null,
     val features: List<Feature> = listOf(),
     override val docString: String? = null
 ) : NamedSchema
 
-data class EnumValue(
-    val name: String,
+data class StructMember(
+    val type: TypeRef,
     val `if`: Condition? = null,
     val features: List<Feature> = listOf()
 )

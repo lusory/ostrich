@@ -37,6 +37,12 @@ fun parseType(type: String): KClass<*> = when (type) {
     else -> throw IllegalArgumentException("Unknown type $type")
 }
 
+fun parseTypeRef(node: JsonNode): TypeRef = when {
+    node.isArray -> TypeRef(parseType(node[0].asText()), true)
+    node.isTextual -> TypeRef(parseType(node.asText()), false)
+    else -> throw IllegalArgumentException("Invalid type ref form $node")
+}
+
 fun parseConditionType(node: JsonNode): ConditionType = when {
     node.has("all") -> ConditionType.ALL
     node.has("any") -> ConditionType.ANY
@@ -45,60 +51,111 @@ fun parseConditionType(node: JsonNode): ConditionType = when {
     else -> throw IllegalArgumentException("Unknown condition type $node")
 }
 
-fun parseCondition(node: JsonNode): Condition? = node.get("if")?.let { conditionNode ->
+fun parseCondition(node: JsonNode): Condition? = node["if"]?.let { conditionNode ->
     if (conditionNode.isTextual) {
         return@let Condition(value = conditionNode.asText())
     }
     val conditionType: ConditionType = parseConditionType(conditionNode)
     return@let Condition(
         type = conditionType,
-        conditions = if (conditionType != ConditionType.NOT) conditionNode.get(conditionType.name.toLowerCase()).map { parseCondition(it)!! } else listOf(),
-        value = conditionNode.get("not")?.asText()
+        conditions = if (conditionType != ConditionType.NOT) conditionNode[conditionType.name.toLowerCase()].map { parseCondition(it)!! } else listOf(),
+        value = conditionNode["not"]?.asText()
     )
 }
 
-fun parseIncludeDirective(node: JsonNode): IncludeDirective? = node.get("include")?.let { includeNode ->
+fun parseIncludeDirective(node: JsonNode): IncludeDirective? = node["include"]?.let { includeNode ->
     IncludeDirective(includeNode.asText())
 }
 
-fun parsePragmaDirective(node: JsonNode): PragmaDirective? = node.get("pragma")?.let { pragmaNode ->
+fun parsePragmaDirective(node: JsonNode): PragmaDirective? = node["pragma"]?.let { pragmaNode ->
     PragmaDirective(
-        docRequired = pragmaNode.get("doc-required")?.asBoolean(),
-        commandReturnsExceptions = pragmaNode.get("command-returns-exceptions")?.map { it.asText() } ?: listOf(),
-        commandNameExceptions = pragmaNode.get("command-name-exceptions")?.map { it.asText() } ?: listOf(),
-        memberNameExceptions = pragmaNode.get("member-name-exceptions")?.map { it.asText() } ?: listOf()
+        docRequired = pragmaNode["doc-required"]?.asBoolean(),
+        commandReturnsExceptions = pragmaNode["command-returns-exceptions"]?.map { it.asText() } ?: listOf(),
+        commandNameExceptions = pragmaNode["command-name-exceptions"]?.map { it.asText() } ?: listOf(),
+        memberNameExceptions = pragmaNode["member-name-exceptions"]?.map { it.asText() } ?: listOf()
     )
 }
 
 fun parseFeature(node: JsonNode): Feature = when {
     node.isTextual -> Feature(name = node.asText())
     node.has("name") -> Feature(
-        name = node.get("name").asText(),
+        name = node["name"].asText(),
         `if` = parseCondition(node)
     )
     else -> throw IllegalArgumentException("Malformed feature")
 }
 
-fun parseFeatures(node: JsonNode): List<Feature> = node.get("features")?.map { parseFeature(it) } ?: listOf()
+fun parseFeatures(node: JsonNode): List<Feature> = node["features"]?.map { parseFeature(it) } ?: listOf()
 
 fun parseEnumValue(node: JsonNode): EnumValue = when {
     node.isTextual -> EnumValue(name = node.asText())
     node.has("name") -> EnumValue(
-        name = node.get("name").asText(),
+        name = node["name"].asText(),
         `if` = parseCondition(node),
         features = parseFeatures(node)
     )
     else -> throw IllegalArgumentException("Malformed enum value")
 }
 
-fun parseEnumValues(node: JsonNode): List<EnumValue> = node.get("data")?.map { parseEnumValue(it) } ?: listOf()
+fun parseEnumValues(node: JsonNode): List<EnumValue> = node["data"]?.map { parseEnumValue(it) } ?: listOf()
 
-fun parseEnum(node: JsonNode, docString: (String?) -> String? = { null }): Enum0? = node.get("enum")?.asText()?.let { enumName ->
+fun parseEnum(node: JsonNode, docString: (String?) -> String? = { null }): Enum0? = node["enum"]?.asText()?.let { enumName ->
     Enum0(
         name = enumName,
         docString = docString(enumName),
         data = parseEnumValues(node),
-        prefix = node.get("prefix")?.asText(),
+        prefix = node["prefix"]?.asText(),
+        `if` = parseCondition(node),
+        features = parseFeatures(node)
+    )
+}
+
+fun parseStructMember(node: JsonNode): StructMember = when {
+    node.isArray || node.isTextual -> StructMember(parseTypeRef(node))
+    else -> StructMember(
+        parseTypeRef(node["type"]),
+        `if` = parseCondition(node),
+        features = parseFeatures(node)
+    )
+}
+
+fun parseStructMembers(node: JsonNode): Map<String, StructMember> =
+    node.fields().asSequence().associateBy({ it.key }, { parseStructMember(it.value) })
+
+fun parseStruct(node: JsonNode, docString: (String?) -> String? = { null }): Struct? = node["struct"]?.asText()?.let { structName ->
+    Struct(
+        name = structName,
+        docString = docString(structName),
+        data = parseStructMembers(node["data"]),
+        base = node["base"]?.asText(),
+        `if` = parseCondition(node),
+        features = parseFeatures(node)
+    )
+}
+
+fun parseUnionBranch(node: JsonNode): UnionBranch = when {
+    node.isArray || node.isTextual -> UnionBranch(parseTypeRef(node))
+    else -> UnionBranch(
+        parseTypeRef(node["type"]),
+        `if` = parseCondition(node)
+    )
+}
+
+fun parseUnionBranches(node: JsonNode): Map<String, UnionBranch> =
+    node.fields().asSequence().associateBy({ it.key }, { parseUnionBranch(it.value) })
+
+fun parseUnion(node: JsonNode, docString: (String?) -> String? = { null }): Union? = node["union"]?.asText()?.let { unionName ->
+    Union(
+        name = unionName,
+        docString = docString(unionName),
+        base = node["base"].let { baseNode ->
+            when {
+                baseNode.isTextual -> null to baseNode.asText()
+                else -> parseStructMembers(baseNode) to null
+            }
+        },
+        discriminator = node["discriminator"].asText(),
+        data = parseUnionBranches(node["data"]),
         `if` = parseCondition(node),
         features = parseFeatures(node)
     )
