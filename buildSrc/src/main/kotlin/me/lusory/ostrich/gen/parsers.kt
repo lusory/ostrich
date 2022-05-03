@@ -99,7 +99,7 @@ fun parseEnumValue(node: JsonNode): EnumValue = when {
 
 fun parseEnumValues(node: JsonNode): List<EnumValue> = node["data"]?.map { parseEnumValue(it) } ?: listOf()
 
-fun parseEnum(node: JsonNode, docString: (String?) -> String? = { null }): Enum0? = node["enum"]?.asText()?.let { enumName ->
+fun parseEnum(node: JsonNode, docString: (String) -> String? = { null }): Enum0? = node["enum"]?.asText()?.let { enumName ->
     Enum0(
         name = enumName,
         docString = docString(enumName),
@@ -122,7 +122,7 @@ fun parseStructMember(node: JsonNode): StructMember = when {
 fun parseStructMembers(node: JsonNode): Map<String, StructMember> =
     node.fields().asSequence().associateBy({ it.key }, { parseStructMember(it.value) })
 
-fun parseStruct(node: JsonNode, docString: (String?) -> String? = { null }): Struct? = node["struct"]?.asText()?.let { structName ->
+fun parseStruct(node: JsonNode, docString: (String) -> String? = { null }): Struct? = node["struct"]?.asText()?.let { structName ->
     Struct(
         name = structName,
         docString = docString(structName),
@@ -144,18 +144,39 @@ fun parseUnionBranch(node: JsonNode): UnionBranch = when {
 fun parseUnionBranches(node: JsonNode): Map<String, UnionBranch> =
     node.fields().asSequence().associateBy({ it.key }, { parseUnionBranch(it.value) })
 
-fun parseUnion(node: JsonNode, docString: (String?) -> String? = { null }): Union? = node["union"]?.asText()?.let { unionName ->
+fun parseUnion(node: JsonNode, docString: (String) -> String? = { null }): Union? = node["union"]?.asText()?.let { unionName ->
     Union(
         name = unionName,
         docString = docString(unionName),
         base = node["base"].let { baseNode ->
             when {
-                baseNode.isTextual -> null to baseNode.asText()
-                else -> parseStructMembers(baseNode) to null
+                baseNode.isTextual -> null either baseNode.asText()
+                else -> parseStructMembers(baseNode) either null
             }
         },
         discriminator = node["discriminator"].asText(),
         data = parseUnionBranches(node["data"]),
+        `if` = parseCondition(node),
+        features = parseFeatures(node)
+    )
+}
+
+fun parseAlternative(node: JsonNode): Alternative = when {
+    node.isTextual -> Alternative(parseType(node.asText()))
+    else -> Alternative(
+        type = parseType(node["type"].asText()),
+        `if` = parseCondition(node)
+    )
+}
+
+fun parseAlternatives(node: JsonNode): Map<String, Alternative> =
+    node.fields().asSequence().associateBy({ it.key }, { parseAlternative(it.value) })
+
+fun parseAlternate(node: JsonNode, docString: (String) -> String? = { null }): Alternate? = node["alternate"]?.asText()?.let { alternateName ->
+    Alternate(
+        name = alternateName,
+        docString = docString(alternateName),
+        data = parseAlternatives(node["data"]),
         `if` = parseCondition(node),
         features = parseFeatures(node)
     )
