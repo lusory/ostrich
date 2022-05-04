@@ -1,4 +1,4 @@
-import me.lusory.ostrich.gen.Generator
+import me.lusory.ostrich.gen.parseSchemaFile
 import me.lusory.ostrich.gradle.DependencyVersions
 
 dependencies {
@@ -54,6 +54,11 @@ tasks.register("generateQapiModels") {
         generatedSourceDir.deleteRecursively()
     }
     doLast {
-        Generator(qapiWorkingDir.walkTopDown().filter { it.isFile }.toList(), generatedSourceDir)
+        qapiWorkingDir.walkTopDown()
+            .filter { it.isFile }
+            .map(::parseSchemaFile)
+            .forEach { println("Parsed schema file ${it.name}.") }
+
+        // Generator(qapiWorkingDir.walkTopDown().filter { it.isFile }.toList(), generatedSourceDir)
     }
 }

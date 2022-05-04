@@ -12,6 +12,6 @@ data class Alternate(
 ) : NamedSchema
 
 data class Alternative(
-    val type: KClass<*>,
+    val type: Either<KClass<*>, String>,
     val `if`: Condition? = null
 )
