@@ -83,6 +83,7 @@ val FEATURE: ClassName = ClassName.get("me.lusory.ostrich.qapi", "Feature")
 val LIST: ClassName = ClassName.get(java.util.List::class.java)
 val TRANSFORM_UTILS: ClassName = ClassName.get("me.lusory.ostrich.qapi.util", "TransformUtils")
 
+val NOT_NULL: AnnotationSpec = AnnotationSpec.builder(ClassName.get("org.jetbrains.annotations", "NotNull")).build()
 val NULLABLE: AnnotationSpec = AnnotationSpec.builder(ClassName.get("org.jetbrains.annotations", "Nullable")).build()
 val UNMODIFIABLE: AnnotationSpec = AnnotationSpec.builder(ClassName.get("org.jetbrains.annotations", "Unmodifiable")).build()
 val JSON_VALUE: AnnotationSpec = AnnotationSpec.builder(JsonValue::class.java).build()
@@ -261,12 +262,15 @@ data class WriterContext(
             val isOptional: Boolean = entry.key.startsWith('*')
             val droppedName: String = if (isOptional) entry.key.drop(1) else entry.key
             val sanitizedName: String = droppedName.skewerToLowerCamelCase().replaceReservedKeywords()
+            val type: TypeName = entry.value.type.toTypeName()
             addField(
-                FieldSpec.builder(entry.value.type.toTypeName().let { if (isOptional) it.box() else it }, sanitizedName, Modifier.PRIVATE)
+                FieldSpec.builder(type.let { if (isOptional) it.box() else it }, sanitizedName, Modifier.PRIVATE)
                     .apply {
                         if (isOptional) {
                             initializer("null")
                             addAnnotation(NULLABLE)
+                        } else if (!type.isPrimitive) {
+                            addAnnotation(NOT_NULL)
                         }
                         if (sanitizedName != droppedName) {
                             addAnnotation(
