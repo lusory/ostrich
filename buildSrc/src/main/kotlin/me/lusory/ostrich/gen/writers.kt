@@ -259,7 +259,8 @@ data class WriterContext(
         addAnnotation(ACCESSORS_PREFIX)
         data.forEach { entry ->
             val isOptional: Boolean = entry.key.startsWith('*')
-            val sanitizedName: String = (if (isOptional) entry.key.drop(1) else entry.key).skewerToLowerCamelCase().replaceReservedKeywords()
+            val droppedName: String = if (isOptional) entry.key.drop(1) else entry.key
+            val sanitizedName: String = droppedName.skewerToLowerCamelCase().replaceReservedKeywords()
             addField(
                 FieldSpec.builder(entry.value.type.toTypeName().let { if (isOptional) it.box() else it }, sanitizedName, Modifier.PRIVATE)
                     .apply {
@@ -267,10 +268,10 @@ data class WriterContext(
                             initializer("null")
                             addAnnotation(NULLABLE)
                         }
-                        if (sanitizedName != entry.key) {
+                        if (sanitizedName != droppedName) {
                             addAnnotation(
                                 AnnotationSpec.builder(JsonProperty::class.java)
-                                    .addMember("value", "\$S", if (isOptional) entry.key.drop(1) else entry.key)
+                                    .addMember("value", "\$S", droppedName)
                                     .build()
                             )
                         }
