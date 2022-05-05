@@ -253,7 +253,7 @@ data class WriterContext(
             )
         }
 
-        return if (isArray) ArrayTypeName.of(type) else type
+        return if (isArray) ParameterizedTypeName.get(LIST, type.box()) else type
     }
 
     fun TypeSpec.Builder.writeStructMembers(data: Map<String, StructMember>): TypeSpec.Builder = apply {
