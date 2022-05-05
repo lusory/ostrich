@@ -1,8 +1,13 @@
+import me.lusory.ostrich.gen.WriterContext
+import me.lusory.ostrich.gen.makeWriterContext
 import me.lusory.ostrich.gen.parseSchemaFile
+import me.lusory.ostrich.gen.model.SchemaFile
+import me.lusory.ostrich.gen.model.Enum0
 import me.lusory.ostrich.gradle.DependencyVersions
 
 dependencies {
     compileOnly(group = "org.jetbrains", name = "annotations", version = DependencyVersions.JB_ANNOTATIONS)
+    implementation(group = "com.fasterxml.jackson.core", name = "jackson-databind", version = DependencyVersions.JACKSON)
 }
 
 val sourcesWorkingDir: File = file("build/qemu")
@@ -54,11 +59,20 @@ tasks.register("generateQapiModels") {
         generatedSourceDir.deleteRecursively()
     }
     doLast {
-        qapiWorkingDir.walkTopDown()
+        val schemas: List<SchemaFile> = qapiWorkingDir.walkTopDown()
             .filter { it.isFile }
             .map(::parseSchemaFile)
-            .forEach { println("Parsed schema file ${it.name}.") }
+            .toList()
 
-        // Generator(qapiWorkingDir.walkTopDown().filter { it.isFile }.toList(), generatedSourceDir)
+        val context: WriterContext = makeWriterContext(generatedSourceDir, schemas)
+
+        schemas.forEach { schemaFile ->
+            schemaFile.members.forEach { schema ->
+                when (schema) {
+                    is Enum0 -> context.writeEnum(schema)
+                    else -> println("Skipping unsupported schema type generation ${schema::class.simpleName}")
+                }
+            }
+        }
     }
 }
