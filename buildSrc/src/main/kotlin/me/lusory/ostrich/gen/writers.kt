@@ -12,6 +12,8 @@ import com.squareup.javapoet.ParameterizedTypeName
 import com.squareup.javapoet.TypeSpec
 import me.lusory.ostrich.gen.model.*
 import java.io.File
+import java.text.NumberFormat
+import java.text.ParseException
 import java.util.Arrays
 import java.util.Locale
 import java.util.stream.Collectors
@@ -94,8 +96,20 @@ val JSON_CREATOR: AnnotationSpec = AnnotationSpec.builder(JsonCreator::class.jav
 
 val NULL_CODEBLOCK: CodeBlock = CodeBlock.of("null")
 
+private val NUMBER_FORMAT: NumberFormat = NumberFormat.getInstance()
+
 fun String.replaceReservedKeywords(): String = replace('-', '_').let { s ->
-    if (RESERVED_KEYWORDS.contains(s)) "_$s" else s
+    if (RESERVED_KEYWORDS.contains(s)) {
+        return@let "_$s"
+    }
+    try {
+        // sanitize numbers
+        NUMBER_FORMAT.parse(s)
+        return@let "_$s"
+    } catch (ignored: ParseException) {
+        // ignored
+    }
+    return@let s
 }
 
 fun makeWriterContext(sourceDir: File, schemas: List<SchemaFile>): WriterContext = WriterContext(

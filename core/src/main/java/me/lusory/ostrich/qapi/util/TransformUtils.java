@@ -2,6 +2,8 @@ package me.lusory.ostrich.qapi.util;
 
 import lombok.experimental.UtilityClass;
 
+import java.text.NumberFormat;
+import java.text.ParseException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -70,11 +72,20 @@ public class TransformUtils {
             "while"
     );
 
+    private final NumberFormat NUMBER_FORMAT = NumberFormat.getInstance();
+
     public String replaceReservedKeywords(String s) {
         final String replaced = s.replace('-', '_');
 
         if (RESERVED_KEYWORDS.contains(replaced)) {
             return "_" + replaced;
+        }
+        try {
+            // sanitize numbers
+            NUMBER_FORMAT.parse(replaced);
+            return "_" + replaced;
+        } catch (ParseException ignored) {
+            // ignored
         }
         return replaced;
     }
