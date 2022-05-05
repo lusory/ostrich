@@ -3,14 +3,19 @@ package me.lusory.ostrich.qapi;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 
+import java.util.Collections;
 import java.util.List;
 
 public interface QEnum {
     String toString();
 
     @Nullable
-    Condition getIf();
+    default Condition getIf() {
+        return null;
+    }
 
     @Unmodifiable
-    List<Feature> getFeatures();
+    default List<Feature> getFeatures() {
+        return Collections.emptyList();
+    }
 }

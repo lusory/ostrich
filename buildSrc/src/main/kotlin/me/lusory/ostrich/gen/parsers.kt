@@ -31,6 +31,7 @@ fun parseSchemaType(node: JsonNode): SchemaType = when {
 fun parseType(type: String): KClass<*>? = when (type) {
     "str" -> String::class
     "number" -> Double::class
+    "int" -> Long::class
     "int8" -> Byte::class
     "int16" -> Short::class
     "int32" -> Int::class

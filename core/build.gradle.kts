@@ -3,6 +3,7 @@ import me.lusory.ostrich.gen.makeWriterContext
 import me.lusory.ostrich.gen.parseSchemaFile
 import me.lusory.ostrich.gen.model.SchemaFile
 import me.lusory.ostrich.gen.model.Enum0
+import me.lusory.ostrich.gen.model.Struct
 import me.lusory.ostrich.gradle.DependencyVersions
 
 dependencies {
@@ -70,6 +71,7 @@ tasks.register("generateQapiModels") {
             schemaFile.members.forEach { schema ->
                 when (schema) {
                     is Enum0 -> context.writeEnum(schema)
+                    is Struct -> context.writeStruct(schema)
                     else -> println("Skipping unsupported schema type generation ${schema::class.simpleName}")
                 }
             }
