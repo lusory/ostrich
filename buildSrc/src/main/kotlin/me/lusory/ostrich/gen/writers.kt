@@ -140,39 +140,63 @@ fun String.formatJavadoc(): String {
     return replaced
 }
 
-fun makeWriterContext(sourceDir: File, schemas: List<SchemaFile>): WriterContext = WriterContext(
-    sourceDir,
-    names = schemas.stream()
+fun makeWriterContext(sourceDir: File, schemas: List<SchemaFile>): WriterContext {
+    val enums: List<String> = schemas.stream()
         .flatMap { file ->
-            val newName: String = file.name.replaceReservedKeywords()
+            file.members.stream()
+                .filter { it is Enum0 }
+                .map { (it as Enum0).name }
+        }
+        .collect(Collectors.toList());
 
-            file.members.stream()
-                .filter { it is NamedSchema }
-                .map { newName to (it as NamedSchema) }
-        }
-        .collect(Collectors.toMap({ it.second.name }, { "me.lusory.ostrich.qapi.${it.first}.${it.second.name.replaceReservedKeywords()}" })),
-    structs = schemas.stream()
-        .flatMap { file ->
-            file.members.stream()
-                .filter { it is Struct }
-                .map { it as Struct }
-        }
-        .collect(Collectors.toMap({ it.name }, { it })),
-    alternates = schemas.stream()
-        .flatMap { file ->
-            file.members.stream()
-                .filter { it is Alternate }
-                .map { (it as Alternate).name }
-        }
-        .collect(Collectors.toList())
-)
+    return WriterContext(
+        sourceDir,
+        names = schemas.stream()
+            .flatMap { file ->
+                val newName: String = file.name.replaceReservedKeywords()
+
+                file.members.stream()
+                    .filter { it is NamedSchema }
+                    .map { newName to (it as NamedSchema) }
+            }
+            .collect(Collectors.toMap({ it.second.name }, { "me.lusory.ostrich.qapi.${it.first}.${it.second.name.replaceReservedKeywords()}" })),
+        structs = schemas.stream()
+            .flatMap { file ->
+                file.members.stream()
+                    .filter { it is Struct }
+                    .map { it as Struct }
+            }
+            .collect(Collectors.toMap({ it.name }, { it })),
+        alternates = schemas.stream()
+            .flatMap { file ->
+                file.members.stream()
+                    .filter { it is Alternate }
+                    .map { (it as Alternate).name }
+            }
+            .collect(Collectors.toList()),
+        structEnums = schemas.stream()
+            .flatMap { file ->
+                file.members.stream()
+                    .filter { it is Struct }
+                    .map { struct ->
+                        struct as Struct
+
+                        struct.name to struct.data.entries.stream()
+                            .filter { field -> field.value.type.type.second?.let { it in enums } == true }
+                            .collect(Collectors.toMap({ it.key }, { it.value.type.type.second!! }))
+                    }
+            }
+            .collect(Collectors.toMap({ it.first }, { it.second }))
+    )
+}
 
 data class WriterContext(
     val sourceDir: File,
     // short name - package name
     val names: Map<String, String>,
     val structs: Map<String, Struct>,
-    val alternates: List<String>
+    val alternates: List<String>,
+    val structEnums: Map<String, Map<String, String>>
 ) {
     fun writeEnum(enum0: Enum0) {
         val fullClassName: String = names[enum0.name] ?: error("Could not get class name for ${enum0.name}")
@@ -274,17 +298,27 @@ data class WriterContext(
             .addSuperinterface(QUNION)
             .addAnnotation(GETTER)
             .addAnnotation(SETTER)
-            .addAnnotation(ALL_ARGS_CTOR)
             .addAnnotation(NO_ARGS_CTOR)
             .addAnnotation(EQUALS_AND_HASH_CODE)
             .addAnnotation(TO_STRING)
             .writeCondition(union.`if`, "IF_${union.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
             .writeFeatures(union.features, "FEATURES_${union.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
             .addStringMethod("getRawName", union.name, isStatic = true)
+            .addMethod(
+                MethodSpec.methodBuilder("getDiscriminator")
+                    .addModifiers(Modifier.PUBLIC)
+                    .returns(QENUM)
+                    .addAnnotation(OVERRIDE)
+                    .addAnnotation(JSON_IGNORE)
+                    .addStatement("return this.get${union.discriminator.skewerToLowerCamelCase().capitalize()}()")
+                    .build()
+            )
 
         if (union.docString != null) {
             builder.addJavadoc(union.docString.formatJavadoc())
         }
+
+        var discriminatorType0: String
 
         if (union.base.second != null) {
             val fullBaseName: String = names[union.base.second] ?: error("Could not get class name for ${union.base.second}")
@@ -293,8 +327,21 @@ data class WriterContext(
                 fullBaseName.substringBeforeLast('.'),
                 fullBaseName.substringAfterLast('.')
             ))
+
+            discriminatorType0 = structEnums[union.base.second]!![union.discriminator]!!.let { names[it] ?: error("Could not get class name for $it") }
         } else {
             builder.writeStructMembers(union.base.first!!)
+
+            discriminatorType0 = union.base.first.entries.first { it.key == union.discriminator }.value.type.type.second!!.let { names[it] ?: error("Could not get class name for $it") }
+        }
+
+        val discriminatorType: TypeName = ClassName.get(
+            discriminatorType0.substringBeforeLast('.'),
+            discriminatorType0.substringAfterLast('.')
+        )
+
+        if (builder.fieldSpecs.size != 0) {
+            builder.addAnnotation(ALL_ARGS_CTOR)
         }
 
         union.data.forEach { entry ->
@@ -310,20 +357,14 @@ data class WriterContext(
                 .addAnnotation(NO_ARGS_CTOR)
                 .addAnnotation(EQUALS_AND_HASH_CODE)
                 .addAnnotation(TO_STRING)
-                .addMethod(
-                    MethodSpec.methodBuilder("getDiscriminator")
-                        .addModifiers(Modifier.PUBLIC)
-                        .returns(QENUM)
-                        .addAnnotation(OVERRIDE)
-                        .addAnnotation(JSON_IGNORE)
-                        .addStatement("return this.get${union.discriminator.skewerToLowerCamelCase().capitalize()}()")
-                        .build()
-                )
                 .writeCondition(entry.value.`if`, "IF_${union.name.toUpperCase()}_BRANCH_${entry.key.toUpperCase().skewerToSnakeCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
                 .writeCondition(struct.`if`, "IF_${union.name.toUpperCase()}_STRUCT_${struct.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
                 .writeFeatures(struct.features, "FEATURES_${union.name.toUpperCase()}_STRUCT_${struct.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
                 .addStringMethod("getBaseName", struct.name, isStatic = true)
                 .writeStructMembers(struct.data)
+                .addInitializerBlock(
+                    CodeBlock.of("this.set${union.discriminator.skewerToLowerCamelCase().capitalize()}(\$T.${entry.key.toUpperCase().replaceReservedKeywords()});\n", discriminatorType)
+                )
 
             fun writeInnerStruct(innerStruct: Struct) {
                 unionImplBuilder.writeCondition(innerStruct.`if`, "IF_${union.name.toUpperCase()}_STRUCT_${innerStruct.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
@@ -454,7 +495,7 @@ data class WriterContext(
                                     .build()
                             )
                         }
-                        if (sanitizedName.startsWith('_')) {
+                        if (sanitizedName.startsWith('_') && droppedName != "class") { // fix for PciDeviceClass
                             addAnnotation(ACCESSORS_PREFIX)
                         }
                     }
