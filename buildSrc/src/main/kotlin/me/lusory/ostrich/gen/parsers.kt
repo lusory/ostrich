@@ -178,9 +178,9 @@ fun parseUnion(node: JsonNode, docString: (String) -> String? = { null }): Union
 }
 
 fun parseAlternative(node: JsonNode): Alternative = when {
-    node.isTextual -> Alternative(parseTypeEither(node.asText()))
+    node.isTextual -> Alternative(parseTypeRef(node))
     else -> Alternative(
-        type = parseTypeEither(node["type"].asText()),
+        type = parseTypeRef(node["type"]),
         `if` = parseCondition(node)
     )
 }

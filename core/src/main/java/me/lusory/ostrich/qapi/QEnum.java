@@ -7,6 +7,8 @@ import java.util.Collections;
 import java.util.List;
 
 public interface QEnum {
+    String name();
+
     String toString();
 
     @Nullable

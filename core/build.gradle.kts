@@ -4,6 +4,8 @@ import me.lusory.ostrich.gen.parseSchemaFile
 import me.lusory.ostrich.gen.model.SchemaFile
 import me.lusory.ostrich.gen.model.Enum0
 import me.lusory.ostrich.gen.model.Struct
+import me.lusory.ostrich.gen.model.Union
+import me.lusory.ostrich.gen.model.Alternate
 import me.lusory.ostrich.gradle.DependencyVersions
 
 dependencies {
@@ -60,6 +62,15 @@ tasks.register("generateQapiModels") {
         generatedSourceDir.deleteRecursively()
     }
     doLast {
+        generatedSourceDir.mkdirs()
+
+        generatedSourceDir.resolve("lombok.config").writeText(
+            """
+                config.stopbubbling = true
+                lombok.equalsAndHashCode.callSuper = call
+            """.trimIndent()
+        )
+
         val schemas: List<SchemaFile> = qapiWorkingDir.walkTopDown()
             .filter { it.isFile }
             .map(::parseSchemaFile)
@@ -72,6 +83,8 @@ tasks.register("generateQapiModels") {
                 when (schema) {
                     is Enum0 -> context.writeEnum(schema)
                     is Struct -> context.writeStruct(schema)
+                    is Union -> context.writeUnion(schema)
+                    is Alternate -> context.writeAlternate(schema)
                     else -> println("Skipping unsupported schema type generation ${schema::class.simpleName}")
                 }
             }

@@ -6,4 +6,6 @@ import kotlin.reflect.KClass
 data class TypeRef(
     val type: Either<KClass<*>, String>,
     val isArray: Boolean = false
-)
+) {
+    fun isNull(): Boolean = type.first == Unit::class
+}

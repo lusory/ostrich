@@ -45,11 +45,16 @@ fun TypeSpec.Builder.addToString(value: String, vararg annotations: AnnotationSp
     addStringMethod("toString", value, OVERRIDE, *annotations)
 }
 
-fun TypeSpec.Builder.addStringMethod(name: String, value: String, vararg annotations: AnnotationSpec): TypeSpec.Builder = apply {
+fun TypeSpec.Builder.addStringMethod(name: String, value: String, vararg annotations: AnnotationSpec, isStatic: Boolean = false): TypeSpec.Builder = apply {
     addMethod(
         MethodSpec.methodBuilder(name)
             .addModifiers(Modifier.PUBLIC)
-            .apply { annotations.forEach { addAnnotation(it) } }
+            .apply {
+                if (isStatic) {
+                    addModifiers(Modifier.STATIC)
+                }
+                annotations.forEach { addAnnotation(it) }
+            }
             .returns(java.lang.String::class.java)
             .addStatement("return \$S", value)
             .build()
@@ -65,7 +70,7 @@ fun CodeBlock.Builder.writeList(blocks: Collection<CodeBlock>): CodeBlock.Builde
         } else {
             add("\$T.asList(", Arrays::class.java)
         }
-        blocks.forEach { add(it) }
+        add(CodeBlock.join(blocks, ", "))
         add(")")
     }
 }
