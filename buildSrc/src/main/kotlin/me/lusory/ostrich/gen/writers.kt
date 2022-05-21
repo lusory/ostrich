@@ -325,7 +325,7 @@ data class WriterContext(
                 .addStringMethod("getBaseName", struct.name, isStatic = true)
                 .writeStructMembers(struct.data)
 
-            fun writeInnerStruct(innerStruct: Struct) {
+            tailrec fun writeInnerStruct(innerStruct: Struct) {
                 unionImplBuilder.writeCondition(innerStruct.`if`, "IF_${union.name.toUpperCase()}_STRUCT_${innerStruct.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
                     .writeFeatures(innerStruct.features, "FEATURES_${union.name.toUpperCase()}_STRUCT_${innerStruct.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
                     .writeStructMembers(innerStruct.data)

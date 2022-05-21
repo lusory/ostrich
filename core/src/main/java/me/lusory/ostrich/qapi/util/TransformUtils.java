@@ -1,15 +1,12 @@
 package me.lusory.ostrich.qapi.util;
 
-import lombok.experimental.UtilityClass;
-
 import java.text.NumberFormat;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.List;
 
-@UtilityClass
-public class TransformUtils {
-    public List<String> RESERVED_KEYWORDS = Arrays.asList(
+public final class TransformUtils {
+    public static final List<String> RESERVED_KEYWORDS = Arrays.asList(
             "_",
             "abstract",
             "assert",
@@ -72,9 +69,13 @@ public class TransformUtils {
             "while"
     );
 
-    private final NumberFormat NUMBER_FORMAT = NumberFormat.getInstance();
+    private static final NumberFormat NUMBER_FORMAT = NumberFormat.getInstance();
 
-    public String replaceReservedKeywords(String s) {
+    private TransformUtils() {
+        throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
+    }
+
+    public static String replaceReservedKeywords(String s) {
         final String replaced = s.replace('-', '_');
 
         if (RESERVED_KEYWORDS.contains(replaced)) {
