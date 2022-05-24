@@ -1,12 +1,6 @@
 package me.lusory.ostrich.gen
 
-import com.fasterxml.jackson.annotation.JsonCreator
-import com.fasterxml.jackson.annotation.JsonIgnore
-import com.fasterxml.jackson.annotation.JsonInclude
-import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.annotation.JsonValue
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize
-import com.fasterxml.jackson.databind.annotation.JsonSerialize
+import com.fasterxml.jackson.annotation.*
 import com.squareup.javapoet.*
 import me.lusory.ostrich.gen.model.*
 import java.io.File
@@ -83,9 +77,12 @@ val QENUM: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QEnum")
 val QSTRUCT: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QStruct")
 val QUNION: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QUnion")
 val QALTERNATE: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QAlternate")
-val CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi", "Condition")
-val CONDITION_TYPE: ClassName = ClassName.get("me.lusory.ostrich.qapi", "ConditionType")
-val FEATURE: ClassName = ClassName.get("me.lusory.ostrich.qapi", "Feature")
+val CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Condition")
+val FEATURE: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Feature")
+val FEATURES: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Features")
+val UNION_CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionCondition")
+val UNION_FEATURES: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionFeatures")
+val UNION_BRANCH_CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionBranchCondition")
 val LIST: ClassName = ClassName.get(java.util.List::class.java)
 val ENUM: ClassName = ClassName.get(java.lang.Enum::class.java)
 val TRANSFORM_UTILS: ClassName = ClassName.get("me.lusory.ostrich.qapi.util", "TransformUtils")
@@ -207,8 +204,8 @@ data class WriterContext(
         val builder: TypeSpec.Builder = TypeSpec.enumBuilder(className)
             .addModifiers(Modifier.PUBLIC)
             .addSuperinterface(QENUM)
-            .writeCondition(enum0.`if`, "IF", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
-            .writeFeatures(enum0.features, "FEATURES", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
+            .writeCondition(enum0.`if`)
+            .writeFeatures(enum0.features)
             .addStringMethod("getRawName", enum0.name, isStatic = true)
             .addMethod(
                 MethodSpec.methodBuilder("valueOfRaw")
@@ -228,18 +225,8 @@ data class WriterContext(
             builder.addEnumConstant(
                 value.name.toUpperCase().replaceReservedKeywords(),
                 TypeSpec.anonymousClassBuilder("")
-                    .writeCondition(value.`if`, "if_", Modifier.PRIVATE, Modifier.FINAL)
-                    .apply {
-                        if (value.`if` != null) {
-                            addGetter("getIf", "if_", CONDITION, override_ = true)
-                        }
-                    }
-                    .writeFeatures(value.features, "features", Modifier.PRIVATE, Modifier.FINAL)
-                    .apply {
-                        if (value.features.isNotEmpty()) {
-                            addGetter("getFeatures", "features", ParameterizedTypeName.get(LIST, FEATURE), override_ = true)
-                        }
-                    }
+                    .writeCondition(value.`if`)
+                    .writeFeatures(value.features)
                     .addToString(value.name, JSON_VALUE)
                     .build()
             )
@@ -262,8 +249,8 @@ data class WriterContext(
             .addAnnotation(NO_ARGS_CTOR)
             .addAnnotation(EQUALS_AND_HASH_CODE)
             .addAnnotation(TO_STRING)
-            .writeCondition(struct.`if`, "IF_${struct.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
-            .writeFeatures(struct.features, "FEATURES_${struct.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
+            .writeCondition(struct.`if`)
+            .writeFeatures(struct.features)
             .addStringMethod("getRawName", struct.name, isStatic = true)
             .writeStructMembers(struct.data)
 
@@ -301,8 +288,8 @@ data class WriterContext(
             .addAnnotation(NO_ARGS_CTOR)
             .addAnnotation(EQUALS_AND_HASH_CODE)
             .addAnnotation(TO_STRING)
-            .writeCondition(union.`if`, "IF_${union.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
-            .writeFeatures(union.features, "FEATURES_${union.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
+            .writeCondition(union.`if`, UNION_CONDITION)
+            .writeFeatures(union.features, UNION_FEATURES)
             .addStringMethod("getRawName", union.name, isStatic = true)
             .addMethod(
                 MethodSpec.methodBuilder("getDiscriminator")
@@ -357,9 +344,9 @@ data class WriterContext(
                 .addAnnotation(NO_ARGS_CTOR)
                 .addAnnotation(EQUALS_AND_HASH_CODE)
                 .addAnnotation(TO_STRING)
-                .writeCondition(entry.value.`if`, "IF_${union.name.toUpperCase()}_BRANCH_${entry.key.toUpperCase().skewerToSnakeCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
-                .writeCondition(struct.`if`, "IF_${union.name.toUpperCase()}_STRUCT_${struct.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
-                .writeFeatures(struct.features, "FEATURES_${union.name.toUpperCase()}_STRUCT_${struct.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
+                .writeCondition(entry.value.`if`, UNION_BRANCH_CONDITION)
+                .writeCondition(struct.`if`)
+                .writeFeatures(struct.features)
                 .addStringMethod("getBaseName", struct.name, isStatic = true)
                 .writeStructMembers(struct.data)
                 .addInitializerBlock(
@@ -367,9 +354,8 @@ data class WriterContext(
                 )
 
             tailrec fun writeInnerStruct(innerStruct: Struct) {
-                unionImplBuilder.writeCondition(innerStruct.`if`, "IF_${union.name.toUpperCase()}_STRUCT_${innerStruct.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
-                    .writeFeatures(innerStruct.features, "FEATURES_${union.name.toUpperCase()}_STRUCT_${innerStruct.name.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
-                    .writeStructMembers(innerStruct.data)
+                // not writing the features and condition here, I find it unnecessary
+                unionImplBuilder.writeStructMembers(innerStruct.data)
 
                 if (innerStruct.base != null) {
                     writeInnerStruct(structs[innerStruct.base] ?: error("Could not get struct ${innerStruct.base}"))
@@ -395,8 +381,8 @@ data class WriterContext(
         val builder: TypeSpec.Builder = TypeSpec.interfaceBuilder(className)
             .addModifiers(Modifier.PUBLIC)
             .addSuperinterface(QALTERNATE)
-            .writeCondition(alternate.`if`, "IF_${alternate.name.toUpperCase()}")
-            .writeFeatures(alternate.features, "FEATURES_${alternate.name.toUpperCase()}")
+            .writeCondition(alternate.`if`)
+            .writeFeatures(alternate.features)
 
         val types: MutableList<ClassName> = mutableListOf()
 
@@ -414,7 +400,7 @@ data class WriterContext(
                 .addModifiers(Modifier.PUBLIC)
                 .addSuperinterface(className)
                 .addAnnotation(DATA_OF)
-                .writeCondition(entry.value.`if`, "IF_VALUE_${entry.key.skewerToSnakeCase().toUpperCase()}")
+                .writeCondition(entry.value.`if`)
                 .addField(entry.value.type.toTypeName(), "value", Modifier.PRIVATE)
                 .build()
                 .save(alternateImplName)
@@ -479,6 +465,16 @@ data class WriterContext(
             addField(
                 FieldSpec.builder(type.let { if (isOptional) it.box() else it }, sanitizedName, Modifier.PRIVATE)
                     .apply {
+                        if (entry.value.`if` != null) {
+                            addAnnotation(
+                                entry.value.`if`!!.write(CONDITION)
+                            )
+                        }
+                        if (entry.value.features.isNotEmpty()) {
+                            addAnnotation(
+                                entry.value.features.write(FEATURES)
+                            )
+                        }
                         if (isOptional) {
                             initializer("null")
                             addAnnotation(NULLABLE)
@@ -501,46 +497,42 @@ data class WriterContext(
                     }
                     .build()
             )
-            writeCondition(entry.value.`if`, "IF_MEMBER_${sanitizedName.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
-            writeFeatures(entry.value.features, "FEATURES_MEMBER_${sanitizedName.toUpperCase()}", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
         }
     }
 }
 
-fun TypeSpec.Builder.writeCondition(condition: Condition?, fieldName: String, vararg modifiers: Modifier): TypeSpec.Builder = apply {
+fun TypeSpec.Builder.writeCondition(condition: Condition?, klass: ClassName = CONDITION): TypeSpec.Builder = apply {
     if (condition != null) {
-        addField(
-            FieldSpec.builder(CONDITION, fieldName, *modifiers)
-                .addAnnotation(NULLABLE)
-                .initializer(condition.write())
-                .build()
-        )
+        addAnnotation(condition.write(klass))
     }
 }
 
-fun TypeSpec.Builder.writeFeatures(features: List<Feature>, fieldName: String, vararg modifiers: Modifier): TypeSpec.Builder = apply {
+fun TypeSpec.Builder.writeFeatures(features: Collection<Feature>, klass: ClassName = FEATURES): TypeSpec.Builder = apply {
     if (features.isNotEmpty()) {
-        addField(
-            FieldSpec.builder(ParameterizedTypeName.get(LIST, FEATURE), fieldName, *modifiers)
-                .addAnnotation(UNMODIFIABLE)
-                .initializer(
-                    CodeBlock.builder()
-                        .writeList(features.map { it.write() })
-                        .build()
-                )
-                .build()
-        )
+        addAnnotation(features.write(klass))
     }
 }
 
-fun Condition.write(): CodeBlock = CodeBlock.builder()
-    .add("\$T.of(\$T.${type.name}, ", CONDITION, CONDITION_TYPE)
-    .writeList(conditions.map { it.write() })
-    .add(", \$S)", value)
+fun Condition.compact(): String = when (type) {
+    ConditionType.DEFAULT -> "default:$value"
+    ConditionType.NOT -> "not:$value"
+    ConditionType.ANY -> "any:[${conditions.map(Condition::compact).joinToString(",")}]"
+    ConditionType.ALL -> "all:[${conditions.map(Condition::compact).joinToString(",")}]"
+}
+
+fun Condition.write(klass: ClassName): AnnotationSpec = AnnotationSpec.builder(klass)
+    .addMember("value", "\$S", compact())
     .build()
 
-fun Feature.write(): CodeBlock = CodeBlock.builder()
-    .add("\$T.of(\$S, ", FEATURE, name)
-    .add(`if`?.write() ?: NULL_CODEBLOCK)
-    .add(")")
+fun Feature.write(klass: ClassName): AnnotationSpec = AnnotationSpec.builder(klass)
+    .addMember("name", "\$S", name)
+    .apply {
+        if (`if` != null) {
+            addMember("_if", "\$S", `if`.compact())
+        }
+    }
+    .build()
+
+fun Collection<Feature>.write(klass: ClassName): AnnotationSpec = AnnotationSpec.builder(klass)
+    .addMember("value", "{ \$L }", stream().map { CodeBlock.of("\$L", it.write(FEATURE)) }.collect(CodeBlock.joining(", ")))
     .build()

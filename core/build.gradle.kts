@@ -91,8 +91,3 @@ tasks.register("generateQapiModels") {
         }
     }
 }
-
-java {
-    withJavadocJar()
-    withSourcesJar()
-}
