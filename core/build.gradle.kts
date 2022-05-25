@@ -45,6 +45,11 @@ sourceSets.main {
     tasks.getByName(sourcesJarTaskName).dependsOn("delombok")
 }
 
+// make the javadoc tool less sensitive to broken references
+tasks.getByName<Javadoc>(JavaPlugin.JAVADOC_TASK_NAME) {
+    (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:none", true)
+}
+
 tasks.getByName("delombok") {
     dependsOn("generateQapiModels")
 
@@ -60,7 +65,7 @@ tasks.getByName("delombok") {
                 )
             }
 
-            // delete lombok.config files, they are not needed
+            // delete lombok.config files, they are not needed and break javadoc generation
             if (file.name == "lombok.config") {
                 file.delete()
             }

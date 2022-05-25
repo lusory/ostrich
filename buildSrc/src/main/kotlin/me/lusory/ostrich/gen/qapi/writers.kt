@@ -112,7 +112,16 @@ val ACCESSORS_PREFIX: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lom
 
 val NULL_CODEBLOCK: CodeBlock = CodeBlock.of("null")
 
+val TYPE_REF_REGEX = Regex("@([a-zA-Z0-9_-]+)")
+
 private val NUMBER_FORMAT: NumberFormat = NumberFormat.getInstance()
+
+fun String.formatJavadoc(): String = trim() // remove redundant surrounding whitespace
+    .replace("\$", "\$\$") // escape dollar signs to not confuse javapoet
+    .replace("<", "&lt;") // escape html
+    .replace(">", "&gt;") // escape html
+    .replace("\n", "<br>\n") // emphasize line breaks
+    .replace(TYPE_REF_REGEX) { result -> "<i>${result.groupValues[1]}</i>" } // italicize type references
 
 fun String.replaceReservedKeywords(): String = skewerToSnakeCase().let { s ->
     if (s in RESERVED_KEYWORDS) {
@@ -127,10 +136,6 @@ fun String.replaceReservedKeywords(): String = skewerToSnakeCase().let { s ->
     }
     return@let s
 }
-
-// TODO: better formatting
-fun String.formatJavadoc(): String =
-    replace("@", "").replace("\$", "\$\$").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>\n")
 
 fun makeWriterContext(sourceDir: File, schemas: List<SchemaFile>): WriterContext {
     val enums: List<String> = schemas.stream()
@@ -230,7 +235,7 @@ data class WriterContext(
                 TypeSpec.anonymousClassBuilder("")
                     .writeCondition(value.`if`)
                     .writeFeatures(value.features)
-                    .addToString(value.name, JSON_VALUE)
+                    // .addToString(value.name, JSON_VALUE)
                     .build()
             )
         }
@@ -427,8 +432,7 @@ data class WriterContext(
     fun TypeSpec.save(className: ClassName) {
         JavaFile.builder(className.packageName(), this)
             .addFileComment("This file was generated with ostrich. Do not edit, changes will be overwritten!")
-            // commented out due to me.lusory.ostrich.qapi.common.String
-            // .skipJavaLangImports(true)
+            .skipJavaLangImports(true)
             .indent("    ") // 4 space indent
             .build()
             .writeTo(sourceDir)
