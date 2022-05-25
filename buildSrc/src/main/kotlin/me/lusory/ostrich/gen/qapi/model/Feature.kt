@@ -1,4 +1,4 @@
-package me.lusory.ostrich.gen.model
+package me.lusory.ostrich.gen.qapi.model
 
 data class Feature(
     val name: String,

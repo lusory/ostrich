@@ -1,6 +1,4 @@
-package me.lusory.ostrich.gen.model
-
-import kotlin.reflect.KClass
+package me.lusory.ostrich.gen.qapi.model
 
 // https://www.qemu.org/docs/master/devel/qapi-code-gen.html#alternate-types
 data class Alternate(

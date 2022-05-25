@@ -1,4 +1,4 @@
-package me.lusory.ostrich.gen.model
+package me.lusory.ostrich.gen.qapi.model
 
 // https://www.qemu.org/docs/master/devel/qapi-code-gen.html#enumeration-types
 data class Enum0 (

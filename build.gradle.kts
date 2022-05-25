@@ -24,8 +24,5 @@ subprojects {
 
     addPublication()
 
-    java {
-        withSourcesJar()
-        withJavadocJar()
-    }
+    java.withJavadocJar()
 }

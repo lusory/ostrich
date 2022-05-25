@@ -1,15 +1,19 @@
-package me.lusory.ostrich.gen
+package me.lusory.ostrich.gen.qapi
 
-import com.squareup.javapoet.AnnotationSpec
-import com.squareup.javapoet.CodeBlock
-import com.squareup.javapoet.MethodSpec
-import com.squareup.javapoet.TypeName
-import com.squareup.javapoet.TypeSpec
-import java.util.Arrays
-import java.util.Collections
+import com.squareup.javapoet.*
+import java.util.*
 import javax.lang.model.element.Modifier
 
 val OVERRIDE: AnnotationSpec = AnnotationSpec.builder(Override::class.java).build()
+
+fun has(className: String): Boolean {
+    try {
+        Class.forName(className)
+        return true
+    } catch (ignored: Throwable) {
+        return false
+    }
+}
 
 fun TypeSpec.Builder.addGetter(getterName: String, fieldName: String, fieldType: TypeName, override_: Boolean = false): TypeSpec.Builder = apply {
     addMethod(

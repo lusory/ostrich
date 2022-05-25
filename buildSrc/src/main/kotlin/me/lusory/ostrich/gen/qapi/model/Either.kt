@@ -1,4 +1,4 @@
-package me.lusory.ostrich.gen.model
+package me.lusory.ostrich.gen.qapi.model
 
 data class Either<A : Any, B : Any>(
     val first: A?,

@@ -1,4 +1,4 @@
-package me.lusory.ostrich.gen.model
+package me.lusory.ostrich.gen.qapi.model
 
 // https://www.qemu.org/docs/master/devel/qapi-code-gen.html#include-directives
 data class IncludeDirective(val file: String, override val docString: String? = null) : Schema

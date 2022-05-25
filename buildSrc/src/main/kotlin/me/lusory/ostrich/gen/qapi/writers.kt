@@ -1,8 +1,8 @@
-package me.lusory.ostrich.gen
+package me.lusory.ostrich.gen.qapi
 
 import com.fasterxml.jackson.annotation.*
 import com.squareup.javapoet.*
-import me.lusory.ostrich.gen.model.*
+import me.lusory.ostrich.gen.qapi.model.*
 import java.io.File
 import java.text.NumberFormat
 import java.text.ParseException
@@ -128,14 +128,9 @@ fun String.replaceReservedKeywords(): String = skewerToSnakeCase().let { s ->
     return@let s
 }
 
-fun String.formatJavadoc(): String {
-    var replaced: String = replace("\n@", "\n").replace("\$", "\$\$")
-
-    if (replaced.startsWith('@')) {
-        replaced = replaced.drop(1)
-    }
-    return replaced
-}
+// TODO: better formatting
+fun String.formatJavadoc(): String =
+    replace("@", "").replace("\$", "\$\$").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>\n")
 
 fun makeWriterContext(sourceDir: File, schemas: List<SchemaFile>): WriterContext {
     val enums: List<String> = schemas.stream()
@@ -156,7 +151,15 @@ fun makeWriterContext(sourceDir: File, schemas: List<SchemaFile>): WriterContext
                     .filter { it is NamedSchema }
                     .map { newName to (it as NamedSchema) }
             }
-            .collect(Collectors.toMap({ it.second.name }, { "me.lusory.ostrich.qapi.${it.first}.${it.second.name.replaceReservedKeywords()}" })),
+            .collect(Collectors.toMap({ it.second.name }, {
+                val replacedName: String = it.second.name.replaceReservedKeywords()
+                // mitigate naming conflicts
+                if (has("java.lang.$replacedName")) {
+                    "me.lusory.ostrich.qapi.${it.first}.${replacedName}0"
+                } else {
+                    "me.lusory.ostrich.qapi.${it.first}.$replacedName"
+                }
+            })),
         structs = schemas.stream()
             .flatMap { file ->
                 file.members.stream()
