@@ -91,7 +91,8 @@ tasks.register("pullQemuSources") {
         exec {
             workingDir = sourcesWorkingDir
 
-            commandLine = listOf("git", "checkout", "master", "*.json")
+            // checkout only qapi schemas, command stubs and documentation
+            commandLine = listOf("git", "checkout", "master", "*.json", "*.hx", "*.rst")
         }
     }
 }
