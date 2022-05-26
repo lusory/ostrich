@@ -1,7 +1,7 @@
 @file:Suppress("PropertyName")
 
-import me.lusory.ostrich.gen.qapi.WriterContext
-import me.lusory.ostrich.gen.qapi.makeWriterContext
+import me.lusory.ostrich.gen.qapi.QAPIWriterContext
+import me.lusory.ostrich.gen.qapi.makeQapiWriterContext
 import me.lusory.ostrich.gen.qapi.model.*
 import me.lusory.ostrich.gen.qapi.parseSchemaFile
 import me.lusory.ostrich.gen.qapi.replaceReservedKeywords
@@ -102,10 +102,9 @@ tasks.register("generateQapiModels") {
 
     doFirst {
         generatedSourceDir.deleteRecursively()
+        generatedSourceDir.mkdirs()
     }
     doLast {
-        generatedSourceDir.mkdirs()
-
         generatedSourceDir.resolve("lombok.config").writeText(
             """
                 config.stopbubbling = true
@@ -118,7 +117,7 @@ tasks.register("generateQapiModels") {
             .map(::parseSchemaFile)
             .toList()
 
-        val context: WriterContext = makeWriterContext(generatedSourceDir, schemas)
+        val context: QAPIWriterContext = makeQapiWriterContext(generatedSourceDir, schemas)
 
         schemas.forEach { schemaFile ->
             schemaFile.members.forEach { schema ->

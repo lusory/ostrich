@@ -137,7 +137,7 @@ fun String.replaceReservedKeywords(): String = skewerToSnakeCase().let { s ->
     return@let s
 }
 
-fun makeWriterContext(sourceDir: File, schemas: List<SchemaFile>): WriterContext {
+fun makeQapiWriterContext(sourceDir: File, schemas: List<SchemaFile>): QAPIWriterContext {
     val enums: List<String> = schemas.stream()
         .flatMap { file ->
             file.members.stream()
@@ -146,7 +146,7 @@ fun makeWriterContext(sourceDir: File, schemas: List<SchemaFile>): WriterContext
         }
         .collect(Collectors.toList());
 
-    return WriterContext(
+    return QAPIWriterContext(
         sourceDir,
         names = schemas.stream()
             .flatMap { file ->
@@ -195,7 +195,7 @@ fun makeWriterContext(sourceDir: File, schemas: List<SchemaFile>): WriterContext
     )
 }
 
-data class WriterContext(
+data class QAPIWriterContext(
     val sourceDir: File,
     // short name - package name
     val names: Map<String, String>,
