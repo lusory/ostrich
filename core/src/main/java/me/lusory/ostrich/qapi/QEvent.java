@@ -9,7 +9,7 @@ import java.time.Instant;
 
 @JsonSerialize(using = QEventSerializer.class)
 @JsonDeserialize(using = QEventDeserializer.class)
-public interface QEvent {
-    QStruct getData();
+public interface QEvent<T extends QStruct> {
+    T getData();
     Instant getTimestamp();
 }

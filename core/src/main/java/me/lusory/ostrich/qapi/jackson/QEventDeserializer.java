@@ -10,9 +10,9 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.time.Instant;
 
-public class QEventDeserializer extends JsonDeserializer<QEvent> {
+public class QEventDeserializer extends JsonDeserializer<QEvent<?>> {
     @Override
-    public QEvent deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+    public QEvent<?> deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
         final JsonNode node = p.readValueAsTree();
         final JsonNode timestampNode = node.get("timestamp");
         final Class<?> type = ctxt.getContextualType().getRawClass();
@@ -24,8 +24,10 @@ public class QEventDeserializer extends JsonDeserializer<QEvent> {
 
         try {
             final Class<?> dataType = type.getDeclaredField("data").getType();
+            final Object dataInstance = node.has("data") ? p.getCodec().treeToValue(node.get("data"), dataType) : null;
 
-            return (QEvent) type.getDeclaredConstructor(Instant.class, dataType).newInstance(timestamp, p.getCodec().treeToValue(node.get("data"), dataType));
+            return (QEvent<?>) type.getDeclaredConstructor(Instant.class, dataType)
+                    .newInstance(timestamp, dataInstance);
         } catch (NoSuchFieldException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }

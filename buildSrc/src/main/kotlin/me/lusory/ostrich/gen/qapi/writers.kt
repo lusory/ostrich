@@ -450,9 +450,19 @@ data class QAPIWriterContext(
             fullClassName.substringBeforeLast('.'),
             fullClassName.substringAfterLast('.')
         )
+        val dataClassName: ClassName = if (event.data.first != null) {
+            ClassName.get(className.packageName(), className.simpleName(), "Data")
+        } else {
+            val fullDataClassName: String = names[event.data.second] ?: error("Could not get class name for ${event.data.second}")
+
+            ClassName.get(
+                fullDataClassName.substringBeforeLast('.'),
+                fullDataClassName.substringAfterLast('.')
+            )
+        }
         val builder: TypeSpec.Builder = TypeSpec.classBuilder(className)
             .addModifiers(Modifier.PUBLIC)
-            .addSuperinterface(QEVENT)
+            .addSuperinterface(ParameterizedTypeName.get(QEVENT, dataClassName))
             .addAnnotation(GETTER)
             .addAnnotation(SETTER)
             .addAnnotation(ALL_ARGS_CTOR)
@@ -462,6 +472,7 @@ data class QAPIWriterContext(
             .writeFeatures(event.features)
             .addStringMethod("getRawName", event.name, isStatic = true)
             .addField(INSTANT, "timestamp", Modifier.PRIVATE)
+            .addField(dataClassName, "data", Modifier.PRIVATE)
 
         if (event.docString != null) {
             builder.addJavadoc(event.docString.formatJavadoc())
@@ -486,15 +497,6 @@ data class QAPIWriterContext(
                         }
                         .build()
                 )
-                .addField(ClassName.get(className.packageName(), className.simpleName(), "Data"), "data", Modifier.PRIVATE)
-        } else {
-            val fullDataClassName: String = names[event.data.second] ?: error("Could not get class name for ${event.data.second}")
-            val dataClassName: ClassName = ClassName.get(
-                fullDataClassName.substringBeforeLast('.'),
-                fullDataClassName.substringAfterLast('.')
-            )
-
-            builder.addField(dataClassName, "data", Modifier.PRIVATE)
         }
 
         builder.build().save(className)
