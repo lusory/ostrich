@@ -6,6 +6,7 @@ import me.lusory.ostrich.gen.qapi.model.*
 import java.io.File
 import java.text.NumberFormat
 import java.text.ParseException
+import java.time.Instant
 import java.util.*
 import java.util.stream.Collectors
 import javax.lang.model.element.Modifier
@@ -77,6 +78,7 @@ val QENUM: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QEnum")
 val QSTRUCT: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QStruct")
 val QUNION: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QUnion")
 val QALTERNATE: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QAlternate")
+val QEVENT: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QEvent")
 val CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Condition")
 val FEATURE: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Feature")
 val FEATURES: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Features")
@@ -84,7 +86,10 @@ val UNION_CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.
 val UNION_FEATURES: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionFeatures")
 val UNION_BRANCH_CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionBranchCondition")
 val LIST: ClassName = ClassName.get(java.util.List::class.java)
+val MAP: ClassName = ClassName.get(java.util.Map::class.java)
 val ENUM: ClassName = ClassName.get(java.lang.Enum::class.java)
+val STRING: ClassName = ClassName.get(java.lang.String::class.java)
+val INSTANT: ClassName = ClassName.get(Instant::class.java)
 val TRANSFORM_UTILS: ClassName = ClassName.get("me.lusory.ostrich.qapi.util", "TransformUtils")
 val CLASS_WILDCARD: TypeName = ParameterizedTypeName.get(ClassName.get(java.lang.Class::class.java), TypeVariableName.get("?"))
 
@@ -102,13 +107,13 @@ val ALL_ARGS_CTOR: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok
 val NO_ARGS_CTOR: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok", "NoArgsConstructor")).build()
 val TO_STRING: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok", "ToString")).build()
 val EQUALS_AND_HASH_CODE: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok", "EqualsAndHashCode")).build()
-val DATA: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok", "Data")).build()
 val DATA_OF: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok", "Data"))
     .addMember("staticConstructor", "\$S", "of")
     .build()
 val ACCESSORS_PREFIX: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok.experimental", "Accessors"))
     .addMember("prefix", "\$S", "_")
     .build()
+val UTILITY_CLASS: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok.experimental", "UtilityClass")).build()
 
 val NULL_CODEBLOCK: CodeBlock = CodeBlock.of("null")
 
@@ -157,7 +162,13 @@ fun makeQapiWriterContext(sourceDir: File, schemas: List<SchemaFile>): QAPIWrite
                     .map { newName to (it as NamedSchema) }
             }
             .collect(Collectors.toMap({ it.second.name }, {
-                val replacedName: String = it.second.name.replaceReservedKeywords()
+                val replacedName: String = it.second.name.replaceReservedKeywords().let { name ->
+                    if (it.second is Event) {
+                        name.toLowerCase().snakeToLowerCamelCase().capitalize() + "Event"
+                    } else {
+                        name
+                    }
+                }
                 // mitigate naming conflicts
                 if (has("java.lang.$replacedName")) {
                     "me.lusory.ostrich.qapi.${it.first}.${replacedName}0"
@@ -392,6 +403,10 @@ data class QAPIWriterContext(
             .writeCondition(alternate.`if`)
             .writeFeatures(alternate.features)
 
+        if (alternate.docString != null) {
+            builder.addJavadoc(alternate.docString.formatJavadoc())
+        }
+
         val types: MutableList<ClassName> = mutableListOf()
 
         alternate.data.forEach { entry ->
@@ -427,6 +442,100 @@ data class QAPIWriterContext(
         )
 
         builder.build().save(className)
+    }
+
+    fun writeEvent(event: Event) {
+        val fullClassName: String = names[event.name] ?: error("Could not get class name for ${event.name}")
+        val className: ClassName = ClassName.get(
+            fullClassName.substringBeforeLast('.'),
+            fullClassName.substringAfterLast('.')
+        )
+        val builder: TypeSpec.Builder = TypeSpec.classBuilder(className)
+            .addModifiers(Modifier.PUBLIC)
+            .addSuperinterface(QEVENT)
+            .addAnnotation(GETTER)
+            .addAnnotation(SETTER)
+            .addAnnotation(ALL_ARGS_CTOR)
+            .addAnnotation(EQUALS_AND_HASH_CODE)
+            .addAnnotation(TO_STRING)
+            .writeCondition(event.`if`)
+            .writeFeatures(event.features)
+            .addStringMethod("getRawName", event.name, isStatic = true)
+            .addField(INSTANT, "timestamp", Modifier.PRIVATE)
+
+        if (event.docString != null) {
+            builder.addJavadoc(event.docString.formatJavadoc())
+        }
+
+        if (event.data.first != null) {
+            builder
+                .addType(
+                    TypeSpec.classBuilder("Data")
+                        .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                        .addSuperinterface(QSTRUCT)
+                        .addAnnotation(GETTER)
+                        .addAnnotation(SETTER)
+                        .addAnnotation(NO_ARGS_CTOR)
+                        .addAnnotation(EQUALS_AND_HASH_CODE)
+                        .addAnnotation(TO_STRING)
+                        .writeStructMembers(event.data.first)
+                        .apply {
+                            if (event.data.first.size != 0) {
+                                addAnnotation(ALL_ARGS_CTOR)
+                            }
+                        }
+                        .build()
+                )
+                .addField(ClassName.get(className.packageName(), className.simpleName(), "Data"), "data", Modifier.PRIVATE)
+        } else {
+            val fullDataClassName: String = names[event.data.second] ?: error("Could not get class name for ${event.data.second}")
+            val dataClassName: ClassName = ClassName.get(
+                fullDataClassName.substringBeforeLast('.'),
+                fullDataClassName.substringAfterLast('.')
+            )
+
+            builder.addField(dataClassName, "data", Modifier.PRIVATE)
+        }
+
+        builder.build().save(className)
+    }
+
+    fun writeEventsMeta(events: List<Event>) {
+        val className: ClassName = ClassName.get("me.lusory.ostrich.qapi", "Events")
+
+        TypeSpec.classBuilder(className)
+            .addModifiers(Modifier.PUBLIC)
+            .addAnnotation(UTILITY_CLASS)
+            .addField(
+                FieldSpec.builder(ParameterizedTypeName.get(MAP, STRING, CLASS_WILDCARD), "TYPES", Modifier.PUBLIC, Modifier.FINAL)
+                    .addAnnotation(UNMODIFIABLE)
+                    .initializer(
+                        CodeBlock.builder()
+                            .add("\$T.unmodifiableMap(new \$T<\$T, \$T>() {\n", Collections::class.java, java.util.HashMap::class.java, STRING, CLASS_WILDCARD)
+                            .indent()
+                            .add("{\n")
+                            .indent()
+                            .apply {
+                                events.forEach { event ->
+                                    val fullEventClassName: String = names[event.name] ?: error("Could not get class name for ${event.name}")
+                                    val eventClassName: ClassName = ClassName.get(
+                                        fullEventClassName.substringBeforeLast('.'),
+                                        fullEventClassName.substringAfterLast('.')
+                                    )
+
+                                    add("put(\$S, \$T.class);\n", event.name, eventClassName)
+                                }
+                            }
+                            .unindent()
+                            .add("}\n")
+                            .unindent()
+                            .add("})")
+                            .build()
+                    )
+                    .build()
+            )
+            .build()
+            .save(className)
     }
 
     fun TypeSpec.save(className: ClassName) {
