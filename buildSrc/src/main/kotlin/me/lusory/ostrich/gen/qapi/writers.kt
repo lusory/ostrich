@@ -104,7 +104,8 @@ val JSON_VALUE: AnnotationSpec = AnnotationSpec.builder(JsonValue::class.java).b
 val JSON_CREATOR: AnnotationSpec = AnnotationSpec.builder(JsonCreator::class.java).build()
 val JSON_IGNORE: AnnotationSpec = AnnotationSpec.builder(JsonIgnore::class.java).build()
 val INCLUDE_ALWAYS: AnnotationSpec = AnnotationSpec.builder(JsonInclude::class.java).build()
-val JSON_UNWRAPPED: AnnotationSpec = AnnotationSpec.builder(JsonUnwrapped::class.java).build()
+val JSON_ANY_GETTER: AnnotationSpec = AnnotationSpec.builder(JsonAnyGetter::class.java).build()
+val JSON_ANY_SETTER: AnnotationSpec = AnnotationSpec.builder(JsonAnySetter::class.java).build()
 
 val GETTER: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok", "Getter")).build()
 val SETTER: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok", "Setter")).build()
@@ -636,7 +637,9 @@ data class QAPIWriterContext(
                                 if (command.gen == false) {
                                     addField(
                                         FieldSpec.builder(ParameterizedTypeName.get(MAP, STRING, TypeName.OBJECT), "extraProps", Modifier.PRIVATE)
-                                            .addAnnotation(JSON_UNWRAPPED)
+                                            .addAnnotation(JSON_IGNORE)
+                                            .addAnnotation(JSON_ANY_GETTER)
+                                            .addAnnotation(JSON_ANY_SETTER)
                                             .build()
                                     )
                                 }

@@ -1,18 +1,32 @@
 package me.lusory.ostrich.qapi.jackson;
 
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.BeanProperty;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.deser.ContextualDeserializer;
 import me.lusory.ostrich.qapi.QAlternate;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 
-public class QAlternateDeserializer extends JsonDeserializer<QAlternate> {
+public class QAlternateDeserializer extends JsonDeserializer<QAlternate> implements ContextualDeserializer {
+    private Class<?> type;
+
+    public QAlternateDeserializer(Class<?> type) {
+        this.type = type;
+    }
+
+    public QAlternateDeserializer() {
+    }
+
+    @Override
+    public JsonDeserializer<?> createContextual(DeserializationContext deserializationContext, BeanProperty beanProperty) {
+        return new QAlternateDeserializer(deserializationContext.getContextualType().getRawClass());
+    }
+
     @Override
     public QAlternate deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
-        final Class<?> type = ctxt.getContextualType().getRawClass();
-
         try {
             for (final Class<?> klass : (Class<?>[]) type.getField("TYPES").get(null)) {
                 try {

@@ -44,15 +44,8 @@ fun Project.addPublication() {
 
 fun Project.enableTests() {
     dependencies {
-        add("testImplementation", kotlin("reflect"))
-
-        add("testImplementation", kotlin("test"))
-        add("testImplementation", "org.mockito.kotlin:mockito-kotlin:${DependencyVersions.MOCKITO_KT}") {
-            constraints {
-                // bump mockito version
-                add("testImplementation", "org.mockito:mockito-core:${DependencyVersions.MOCKITO}")
-            }
-        }
+        add("testImplementation", "org.junit.jupiter:junit-jupiter-api:${DependencyVersions.JUNIT}")
+        add("testRuntimeOnly", "org.junit.jupiter:junit-jupiter-engine:${DependencyVersions.JUNIT}")
     }
 
     tasks.withType<Test> {

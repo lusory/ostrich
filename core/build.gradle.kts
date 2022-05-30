@@ -6,6 +6,7 @@ import me.lusory.ostrich.gen.qapi.model.*
 import me.lusory.ostrich.gen.qapi.parseSchemaFile
 import me.lusory.ostrich.gen.qapi.replaceReservedKeywords
 import me.lusory.ostrich.gradle.DependencyVersions
+import me.lusory.ostrich.gradle.enableTests
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.plugins.internal.JvmPluginsHelper
 import java.util.Collections
@@ -136,3 +137,5 @@ tasks.register("generateQapiModels") {
         context.writeEventsMeta(schemas.flatMap { it.members }.filterIsInstance(Event::class.java))
     }
 }
+
+enableTests()
