@@ -79,12 +79,16 @@ val QSTRUCT: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QStruct")
 val QUNION: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QUnion")
 val QALTERNATE: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QAlternate")
 val QEVENT: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QEvent")
+val QCOMMAND: ClassName = ClassName.get("me.lusory.ostrich.qapi", "QCommand")
+val EMPTY_STRUCT: ClassName = ClassName.get("me.lusory.ostrich.qapi", "EmptyStruct")
 val CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Condition")
 val FEATURE: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Feature")
 val FEATURES: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Features")
 val UNION_CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionCondition")
 val UNION_FEATURES: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionFeatures")
 val UNION_BRANCH_CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionBranchCondition")
+val COMMAND: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Command")
+val RAW_NAME: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "RawName")
 val LIST: ClassName = ClassName.get(java.util.List::class.java)
 val MAP: ClassName = ClassName.get(java.util.Map::class.java)
 val ENUM: ClassName = ClassName.get(java.lang.Enum::class.java)
@@ -100,6 +104,7 @@ val JSON_VALUE: AnnotationSpec = AnnotationSpec.builder(JsonValue::class.java).b
 val JSON_CREATOR: AnnotationSpec = AnnotationSpec.builder(JsonCreator::class.java).build()
 val JSON_IGNORE: AnnotationSpec = AnnotationSpec.builder(JsonIgnore::class.java).build()
 val INCLUDE_ALWAYS: AnnotationSpec = AnnotationSpec.builder(JsonInclude::class.java).build()
+val JSON_UNWRAPPED: AnnotationSpec = AnnotationSpec.builder(JsonUnwrapped::class.java).build()
 
 val GETTER: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok", "Getter")).build()
 val SETTER: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok", "Setter")).build()
@@ -163,10 +168,10 @@ fun makeQapiWriterContext(sourceDir: File, schemas: List<SchemaFile>): QAPIWrite
             }
             .collect(Collectors.toMap({ it.second.name }, {
                 val replacedName: String = it.second.name.replaceReservedKeywords().let { name ->
-                    if (it.second is Event) {
-                        name.toLowerCase().snakeToLowerCamelCase().capitalize() + "Event"
-                    } else {
-                        name
+                    when (it.second) {
+                        is Event -> name.toLowerCase().snakeToLowerCamelCase().capitalize() + "Event"
+                        is Command -> name.snakeToLowerCamelCase().capitalize() + "Command"
+                        else -> name
                     }
                 }
                 // mitigate naming conflicts
@@ -225,7 +230,7 @@ data class QAPIWriterContext(
             .addSuperinterface(QENUM)
             .writeCondition(enum0.`if`)
             .writeFeatures(enum0.features)
-            .addStringMethod("getRawName", enum0.name, isStatic = true)
+            .writeRawName(enum0.name)
             .addMethod(
                 MethodSpec.methodBuilder("valueOfRaw")
                     .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
@@ -270,7 +275,7 @@ data class QAPIWriterContext(
             .addAnnotation(TO_STRING)
             .writeCondition(struct.`if`)
             .writeFeatures(struct.features)
-            .addStringMethod("getRawName", struct.name, isStatic = true)
+            .writeRawName(struct.name)
             .writeStructMembers(struct.data)
 
         if (struct.docString != null) {
@@ -309,7 +314,7 @@ data class QAPIWriterContext(
             .addAnnotation(TO_STRING)
             .writeCondition(union.`if`, UNION_CONDITION)
             .writeFeatures(union.features, UNION_FEATURES)
-            .addStringMethod("getRawName", union.name, isStatic = true)
+            .writeRawName(union.name)
             .addMethod(
                 MethodSpec.methodBuilder("getDiscriminator")
                     .addModifiers(Modifier.PUBLIC)
@@ -366,7 +371,7 @@ data class QAPIWriterContext(
                 .writeCondition(entry.value.`if`, UNION_BRANCH_CONDITION)
                 .writeCondition(struct.`if`)
                 .writeFeatures(struct.features)
-                .addStringMethod("getBaseName", struct.name, isStatic = true)
+                .writeRawName(struct.name)
                 .writeStructMembers(struct.data)
                 .addInitializerBlock(
                     CodeBlock.of("this.set${union.discriminator.skewerToLowerCamelCase().capitalize()}(\$T.${entry.key.toUpperCase().replaceReservedKeywords()});\n", discriminatorType)
@@ -402,6 +407,7 @@ data class QAPIWriterContext(
             .addSuperinterface(QALTERNATE)
             .writeCondition(alternate.`if`)
             .writeFeatures(alternate.features)
+            .writeRawName(alternate.name)
 
         if (alternate.docString != null) {
             builder.addJavadoc(alternate.docString.formatJavadoc())
@@ -424,6 +430,7 @@ data class QAPIWriterContext(
                 .addSuperinterface(className)
                 .addAnnotation(DATA_OF)
                 .writeCondition(entry.value.`if`)
+                .writeRawName(entry.key)
                 .addField(entry.value.type.toTypeName(), "value", Modifier.PRIVATE)
                 .build()
                 .save(alternateImplName)
@@ -450,8 +457,12 @@ data class QAPIWriterContext(
             fullClassName.substringBeforeLast('.'),
             fullClassName.substringAfterLast('.')
         )
-        val dataClassName: ClassName = if (event.data.first != null) {
-            ClassName.get(className.packageName(), className.simpleName(), "Data")
+        val dataClassName: ClassName? = if (event.data.first != null) {
+            if (event.data.first.isNotEmpty()) {
+                ClassName.get(className.packageName(), className.simpleName(), "Data")
+            } else {
+                null
+            }
         } else {
             val fullDataClassName: String = names[event.data.second] ?: error("Could not get class name for ${event.data.second}")
 
@@ -462,41 +473,45 @@ data class QAPIWriterContext(
         }
         val builder: TypeSpec.Builder = TypeSpec.classBuilder(className)
             .addModifiers(Modifier.PUBLIC)
-            .addSuperinterface(ParameterizedTypeName.get(QEVENT, dataClassName))
+            .addSuperinterface(ParameterizedTypeName.get(QEVENT, dataClassName ?: EMPTY_STRUCT))
             .addAnnotation(GETTER)
             .addAnnotation(SETTER)
+            .addAnnotation(NO_ARGS_CTOR)
             .addAnnotation(ALL_ARGS_CTOR)
             .addAnnotation(EQUALS_AND_HASH_CODE)
             .addAnnotation(TO_STRING)
             .writeCondition(event.`if`)
             .writeFeatures(event.features)
-            .addStringMethod("getRawName", event.name, isStatic = true)
+            .writeRawName(event.name)
             .addField(INSTANT, "timestamp", Modifier.PRIVATE)
-            .addField(dataClassName, "data", Modifier.PRIVATE)
 
         if (event.docString != null) {
             builder.addJavadoc(event.docString.formatJavadoc())
         }
 
-        if (event.data.first != null) {
-            builder
-                .addType(
-                    TypeSpec.classBuilder("Data")
-                        .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                        .addSuperinterface(QSTRUCT)
-                        .addAnnotation(GETTER)
-                        .addAnnotation(SETTER)
-                        .addAnnotation(NO_ARGS_CTOR)
-                        .addAnnotation(EQUALS_AND_HASH_CODE)
-                        .addAnnotation(TO_STRING)
-                        .writeStructMembers(event.data.first)
-                        .apply {
-                            if (event.data.first.size != 0) {
-                                addAnnotation(ALL_ARGS_CTOR)
+        if (dataClassName != null) {
+            builder.addField(dataClassName, "data", Modifier.PRIVATE)
+
+            if (event.data.first != null) {
+                builder
+                    .addType(
+                        TypeSpec.classBuilder("Data")
+                            .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                            .addSuperinterface(QSTRUCT)
+                            .addAnnotation(GETTER)
+                            .addAnnotation(SETTER)
+                            .addAnnotation(NO_ARGS_CTOR)
+                            .addAnnotation(EQUALS_AND_HASH_CODE)
+                            .addAnnotation(TO_STRING)
+                            .writeStructMembers(event.data.first)
+                            .apply {
+                                if (event.data.first.size != 0) {
+                                    addAnnotation(ALL_ARGS_CTOR)
+                                }
                             }
-                        }
-                        .build()
-                )
+                            .build()
+                    )
+            }
         }
 
         builder.build().save(className)
@@ -538,6 +553,103 @@ data class QAPIWriterContext(
             )
             .build()
             .save(className)
+    }
+
+    fun writeCommand(command: Command) {
+        val fullClassName: String = names[command.name] ?: error("Could not get class name for ${command.name}")
+        val className: ClassName = ClassName.get(
+            fullClassName.substringBeforeLast('.'),
+            fullClassName.substringAfterLast('.')
+        )
+        val responseTypeName: TypeName = command.returns?.toTypeName() ?: EMPTY_STRUCT
+        val dataClassName: ClassName? = if (command.data.first != null) {
+            if (command.data.first.isNotEmpty()) {
+                ClassName.get(className.packageName(), className.simpleName(), "Data")
+            } else {
+                null
+            }
+        } else {
+            val fullDataClassName: String = names[command.data.second] ?: error("Could not get class name for ${command.data.second}")
+
+            ClassName.get(
+                fullDataClassName.substringBeforeLast('.'),
+                fullDataClassName.substringAfterLast('.')
+            )
+        }
+        val builder: TypeSpec.Builder = TypeSpec.classBuilder(className)
+            .addModifiers(Modifier.PUBLIC)
+            .addSuperinterface(ParameterizedTypeName.get(QCOMMAND, dataClassName ?: EMPTY_STRUCT, responseTypeName.box()))
+            .addAnnotation(NO_ARGS_CTOR)
+            .addAnnotation(EQUALS_AND_HASH_CODE)
+            .addAnnotation(TO_STRING)
+            .addAnnotation(
+                AnnotationSpec.builder(COMMAND)
+                    .apply {
+                        if (responseTypeName is ParameterizedTypeName) {
+                            addMember("responseType", "\$T.class", responseTypeName.typeArguments[0])
+                            addMember("respondsWithArray", "true")
+                        } else {
+                            addMember("responseType", "\$T.class", responseTypeName)
+                        }
+                        if (command.successResponse != null) {
+                            addMember("successResponse", "\$L", command.successResponse)
+                        }
+                        if (command.allowOob != null) {
+                            addMember("allowOob", "\$L", command.allowOob)
+                        }
+                        if (command.allowPreconfig != null) {
+                            addMember("allowPreconfig", "\$L", command.allowPreconfig)
+                        }
+                        if (command.coroutine != null) {
+                            addMember("coroutine", "\$L", command.coroutine)
+                        }
+                    }
+                    .build()
+            )
+            .writeCondition(command.`if`)
+            .writeFeatures(command.features)
+            .writeRawName(command.name)
+
+        if (command.docString != null) {
+            builder.addJavadoc(command.docString.formatJavadoc())
+        }
+
+        if (dataClassName != null) {
+            builder.addField(dataClassName, "data", Modifier.PRIVATE)
+                .addAnnotation(GETTER)
+                .addAnnotation(SETTER)
+                .addAnnotation(ALL_ARGS_CTOR)
+
+            if (command.data.first != null) {
+                builder
+                    .addType(
+                        TypeSpec.classBuilder("Data")
+                            .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                            .addSuperinterface(QSTRUCT)
+                            .addAnnotation(GETTER)
+                            .addAnnotation(SETTER)
+                            .addAnnotation(NO_ARGS_CTOR)
+                            .addAnnotation(EQUALS_AND_HASH_CODE)
+                            .addAnnotation(TO_STRING)
+                            .writeStructMembers(command.data.first)
+                            .apply {
+                                if (command.gen == false) {
+                                    addField(
+                                        FieldSpec.builder(ParameterizedTypeName.get(MAP, STRING, TypeName.OBJECT), "extraProps", Modifier.PRIVATE)
+                                            .addAnnotation(JSON_UNWRAPPED)
+                                            .build()
+                                    )
+                                }
+                                if (command.data.first.size != 0) {
+                                    addAnnotation(ALL_ARGS_CTOR)
+                                }
+                            }
+                            .build()
+                    )
+            }
+        }
+
+        builder.build().save(className)
     }
 
     fun TypeSpec.save(className: ClassName) {
@@ -618,6 +730,12 @@ data class QAPIWriterContext(
         }
     }
 }
+
+fun TypeSpec.Builder.writeRawName(name: String): TypeSpec.Builder = addAnnotation(
+    AnnotationSpec.builder(RAW_NAME)
+        .addMember("value", "\$S", name)
+        .build()
+)
 
 fun TypeSpec.Builder.writeCondition(condition: Condition?, klass: ClassName = CONDITION): TypeSpec.Builder = apply {
     if (condition != null) {

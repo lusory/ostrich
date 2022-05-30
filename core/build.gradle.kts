@@ -127,6 +127,7 @@ tasks.register("generateQapiModels") {
                     is Union -> context.writeUnion(schema)
                     is Alternate -> context.writeAlternate(schema)
                     is Event -> context.writeEvent(schema)
+                    is Command -> context.writeCommand(schema)
                     else -> println("Skipping unsupported schema type generation ${schema::class.simpleName}")
                 }
             }

@@ -226,11 +226,11 @@ fun parseCommand(node: JsonNode, docString: (String) -> String? = { null }): Com
         } ?: mapOf<String, StructMember>() either null,
         boxed = node["boxed"]?.asBoolean(),
         returns = node["returns"]?.let(::parseTypeRef),
-        successResponse = node["success-response"]?.asBoolean() ?: false,
-        gen = node["gen"]?.asBoolean() ?: false,
-        allowOob = node["allow-oob"]?.asBoolean() ?: true,
-        allowPreconfig = node["allow-preconfig"]?.asBoolean() ?: true,
-        coroutine = node["coroutine"]?.asBoolean() ?: true,
+        successResponse = node["success-response"]?.asBoolean(),
+        gen = node["gen"]?.asBoolean(),
+        allowOob = node["allow-oob"]?.asBoolean(),
+        allowPreconfig = node["allow-preconfig"]?.asBoolean(),
+        coroutine = node["coroutine"]?.asBoolean(),
         `if` = parseCondition(node),
         features = parseFeatures(node)
     )

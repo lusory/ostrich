@@ -7,6 +7,6 @@ import me.lusory.ostrich.qapi.jackson.QAlternateSerializer;
 
 @JsonSerialize(using = QAlternateSerializer.class)
 @JsonDeserialize(using = QAlternateDeserializer.class)
-public interface QAlternate {
+public interface QAlternate extends QType {
     Object getValue();
 }

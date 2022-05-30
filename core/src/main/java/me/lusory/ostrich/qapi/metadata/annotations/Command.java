@@ -8,6 +8,10 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Command {
+    Class<?> responseType();
+
+    boolean respondsWithArray() default false;
+
     /**
      * Normally, the QAPI schema is used to describe synchronous exchanges, where a response is expected.
      * But in some cases, the action of a command is expected to change state in a way that a successful response is not possible (although the command will still return an error object on failure).

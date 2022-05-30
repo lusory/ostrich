@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import me.lusory.ostrich.qapi.QEvent;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.time.Instant;
 
@@ -22,13 +23,27 @@ public class QEventDeserializer extends JsonDeserializer<QEvent<?>> {
                 timestampNode.get("microseconds").asLong() * 1000
         );
 
+        Field field = null;
         try {
-            final Class<?> dataType = type.getDeclaredField("data").getType();
-            final Object dataInstance = node.has("data") ? p.getCodec().treeToValue(node.get("data"), dataType) : null;
+            field = type.getDeclaredField("data");
+        } catch (NoSuchFieldException ignored) {
+        }
 
-            return (QEvent<?>) type.getDeclaredConstructor(Instant.class, dataType)
-                    .newInstance(timestamp, dataInstance);
-        } catch (NoSuchFieldException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+        if (field != null) {
+            try {
+                final Class<?> dataType = field.getType();
+                final Object dataInstance = p.getCodec().treeToValue(node.get("data"), dataType);
+
+                return (QEvent<?>) type.getDeclaredConstructor(Instant.class, dataType)
+                        .newInstance(timestamp, dataInstance);
+            } catch (NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        try {
+            return (QEvent<?>) type.getDeclaredConstructor(Instant.class)
+                    .newInstance(timestamp);
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
     }
