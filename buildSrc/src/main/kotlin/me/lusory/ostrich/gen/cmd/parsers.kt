@@ -6,7 +6,7 @@ import org.gradle.api.logging.Logging
 import java.io.File
 
 private val LOGGER: Logger = Logging.getLogger("me.lusory.ostrich.gen.cmd.ParsersKt")
-val STUB_REGEX = Regex("DEF\\(((?:(?!DEF\\().)*)\\)\\n?SRST\\n?((?:(?!ERST).)*)\\n?ERST")
+val STUB_REGEX = Regex("DEF\\(((?:(?!DEF\\().)*)\\)\\n?SRST\\n?((?:(?!ERST).)*)\\n?ERST", setOf(RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL))
 
 fun parseStubs(file: File): List<Stub> = STUB_REGEX.findAll(file.readText()).map { result ->
     val params: MutableList<String> = mutableListOf()
@@ -47,7 +47,7 @@ fun parseStubs(file: File): List<Stub> = STUB_REGEX.findAll(file.readText()).map
     return@map Stub(params, result.groupValues[2].trim())
 }.toList()
 
-fun searchDoc(toFind: String, content: String): String? {
+fun searchDoc(toFind: String, content: String, matchFully: Boolean): String? {
     val builder = StringBuilder()
     var found = false
 
@@ -60,7 +60,7 @@ fun searchDoc(toFind: String, content: String): String? {
             break
         }
 
-        if (line == toFind) {
+        if ((line == toFind && matchFully) || (line.startsWith(toFind) && !matchFully)) {
             found = true
         }
     }
@@ -68,11 +68,15 @@ fun searchDoc(toFind: String, content: String): String? {
     return if (found) builder.toString().trim() else null
 }
 
-fun stitchDocs(stubs: List<Stub>, doc: File): List<Stub> {
+fun stitchDocs(stubs: List<Stub>, doc: File, matchFully: Boolean = true): List<Stub> {
     val content: String = doc.readText()
 
     return stubs.map { stub ->
-        val result: String? = searchDoc(stub.rst, content)
+        val result: String? = if (matchFully) {
+            searchDoc(stub.rst, content, matchFully)
+        } else {
+            searchDoc(".. option:: ${stub.params[0]}", content, matchFully)
+        }
 
         if (result != null) {
             Stub(stub.params, result)

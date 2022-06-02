@@ -1,5 +1,6 @@
 @file:Suppress("PropertyName")
 
+import me.lusory.ostrich.gen.cmd.writeQemuImg
 import me.lusory.ostrich.gen.qapi.QAPIWriterContext
 import me.lusory.ostrich.gen.qapi.makeQapiWriterContext
 import me.lusory.ostrich.gen.qapi.model.*
@@ -101,9 +102,15 @@ tasks.register("pullQemuSources") {
 tasks.register("generateQapiModels") {
     dependsOn("pullQemuSources")
 
+    val qapiDir: File = generatedSourceDir.resolve("me/lusory/ostrich/qapi")
+    outputs.dir(qapiDir)
+
+    outputs.upToDateWhen { qapiDir.isDirectory }
+
     doFirst {
-        generatedSourceDir.deleteRecursively()
-        generatedSourceDir.mkdirs()
+        if (!generatedSourceDir.isDirectory) {
+            generatedSourceDir.mkdirs()
+        }
     }
     doLast {
         generatedSourceDir.resolve("lombok.config").writeText(
@@ -129,12 +136,34 @@ tasks.register("generateQapiModels") {
                     is Alternate -> context.writeAlternate(schema)
                     is Event -> context.writeEvent(schema)
                     is Command -> context.writeCommand(schema)
-                    else -> println("Skipping unsupported schema type generation ${schema::class.simpleName}")
+                    else -> logger.info("Skipping unsupported schema type generation ${schema::class.simpleName}")
                 }
             }
         }
 
         context.writeEventsMeta(schemas.flatMap { it.members }.filterIsInstance(Event::class.java))
+    }
+}
+
+tasks.register("generateCommandWrappers") {
+    dependsOn("pullQemuSources")
+
+    val cmdDir: File = generatedSourceDir.resolve("me/lusory/ostrich/cmd")
+    outputs.dir(cmdDir)
+
+    outputs.upToDateWhen { cmdDir.isDirectory }
+
+    doFirst {
+        if (!generatedSourceDir.isDirectory) {
+            generatedSourceDir.mkdirs()
+        }
+    }
+    doLast {
+        writeQemuImg(
+            generatedSourceDir,
+            sourcesWorkingDir.resolve("qemu-img-cmds.hx"),
+            sourcesWorkingDir.resolve("docs/tools/qemu-img.rst")
+        )
     }
 }
 
