@@ -19,6 +19,8 @@ val ACCESSORS_FLUENT_CHAIN: AnnotationSpec = AnnotationSpec.builder(ClassName.ge
 
 val CODE_REGEX: Regex = Regex("``([^`\n]+)``")
 val ITALIC_REGEX: Regex = Regex("\\*([^*\n]+)\\*")
+val VARARG_REGEX: Regex = Regex("([a-zA-Z0-9-_]+) \\[\\12 \\[...\\]\\]")
+val GROUP_VARARG_REGEX: Regex = Regex("\\((.+)\\)\\.\\.\\.")
 
 fun String.formatRst(): String = trim() // remove redundant surrounding whitespace
     .replace("\$", "\$\$") // escape dollar signs to not confuse javapoet
@@ -70,17 +72,21 @@ fun writeQemuImg(sourceDir: File, file: File, docFile: File) {
 
         val desc: String = stub.params[2]
             .replace("[+ | -]", "") // unnecessary
+            .replace(VARARG_REGEX) { result -> "${result.groupValues[1]}_vararg" }
+            .replace(GROUP_VARARG_REGEX) { result -> "[VARARG ${result.groupValues[1]}]" }
 
-        // TODO: add fields and generate marshalling method
+        val args: List<Any> = parseBrackets(desc)
+            .toMutableList().apply { removeAt(0) } // pop command name
+
+        args.forEach { arg ->
+            val optional: Boolean = arg is List<*>
+            val isVararg: Boolean = (arg is List<*> && arg[0] == "VARARG") || (arg is String && arg.endsWith("_vararg"))
+
+            // TODO: add fields
+        }
 
         stubBuilder.build().save(type)
     }
 
     builder.build().save(className)
 }
-
-private data class CommandOption(
-    val name: String,
-    val argName: String?,
-    val isJoinedArg: Boolean
-)

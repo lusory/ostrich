@@ -6,7 +6,7 @@ import org.gradle.api.logging.Logging
 import java.io.File
 
 private val LOGGER: Logger = Logging.getLogger("me.lusory.ostrich.gen.cmd.ParsersKt")
-val STUB_REGEX = Regex("DEF\\(((?:(?!DEF\\().)*)\\)\\n?SRST\\n?((?:(?!ERST).)*)\\n?ERST", setOf(RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL))
+val STUB_REGEX = Regex("DEF\\(((?:(?!DEF\\().)*)\\)(?:\\r\\n|\\r|\\n)?SRST(?:\\r\\n|\\r|\\n)?((?:(?!ERST).)*)(?:\\r\\n|\\r|\\n)?ERST", setOf(RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL))
 
 fun parseStubs(file: File): List<Stub> = STUB_REGEX.findAll(file.readText()).map { result ->
     val params: MutableList<String> = mutableListOf()
@@ -69,7 +69,7 @@ fun searchDoc(toFind: String, content: String, matchFully: Boolean): String? {
 }
 
 fun stitchDocs(stubs: List<Stub>, doc: File, matchFully: Boolean = true): List<Stub> {
-    val content: String = doc.readText()
+    val content: String = doc.readText().replace("\\r", "")
 
     return stubs.map { stub ->
         val result: String? = if (matchFully) {
@@ -85,4 +85,48 @@ fun stitchDocs(stubs: List<Stub>, doc: File, matchFully: Boolean = true): List<S
             stub
         }
     }
+}
+
+fun parseBrackets(s: String): List<Any> {
+    val result: MutableList<Any> = mutableListOf()
+    val builder = StringBuilder()
+
+    var openedBrackets = 0
+    var appending = false
+    for (c: Char in s.toCharArray()) {
+        if (appending) {
+            if (c == '[') {
+                openedBrackets++
+            } else if (c == ']') {
+                if (openedBrackets == 0) {
+                    result.add(parseBrackets(builder.toString()))
+                    builder.setLength(0)
+                    appending = false
+                    continue
+                }
+                openedBrackets--
+            }
+
+            builder.append(c)
+            continue
+        }
+
+        if (c == ' ') {
+            if (builder.isNotEmpty()) {
+                result.add(builder.toString())
+                builder.setLength(0)
+            }
+        } else if (c == '[') {
+            appending = true
+        } else {
+            builder.append(c)
+        }
+    }
+    if (appending) {
+        result.add(parseBrackets(builder.toString()))
+    } else if (builder.isNotEmpty()) {
+        result.add(builder.toString())
+    }
+
+    return result
 }
