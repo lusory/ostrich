@@ -130,3 +130,51 @@ fun parseBrackets(s: String): List<Any> {
 
     return result
 }
+
+// TODO: refactor this
+fun splitArgs(args: List<*>): List<List<String>> {
+    fun flattenAny(elem: Any?): List<*> = if (elem is List<*>) {
+        elem.flatMap(::flattenAny)
+    } else {
+        if (elem == "|") {
+            listOf()
+        } else {
+            listOf(elem)
+        }
+    }
+
+    val result: MutableList<List<String>> = mutableListOf()
+    val args0: MutableList<*> = args.flatMap(::flattenAny).toMutableList()
+    var current: MutableList<String> = mutableListOf()
+    var foundOption = false
+
+    println(args0)
+
+    while (args0.isNotEmpty()) {
+        val elem: String = args0.removeFirst() as String
+
+        if (foundOption) {
+            if (!elem.startsWith('-')) {
+                current.add(elem)
+                result.add(current)
+                current = mutableListOf()
+                foundOption = false
+                continue
+            }
+            result.add(current)
+            current = mutableListOf()
+            foundOption = false
+        }
+
+        if (elem.startsWith('-')) {
+            current.add(elem)
+            foundOption = true
+        } else {
+            result.add(listOf(elem))
+        }
+    }
+
+    println(result)
+
+    return result
+}
