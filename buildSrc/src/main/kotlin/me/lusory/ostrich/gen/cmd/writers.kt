@@ -2,16 +2,16 @@ package me.lusory.ostrich.gen.cmd
 
 import com.squareup.javapoet.*
 import me.lusory.ostrich.gen.cmd.model.Stub
-import me.lusory.ostrich.gen.qapi.GETTER
-import me.lusory.ostrich.gen.qapi.SETTER
-import me.lusory.ostrich.gen.qapi.NO_ARGS_CTOR
-import me.lusory.ostrich.gen.qapi.TO_STRING
-import me.lusory.ostrich.gen.qapi.EQUALS_AND_HASH_CODE
+import me.lusory.ostrich.gen.qapi.*
 import java.io.File
 import javax.lang.model.element.Modifier
 
 val CMD_BUILDER: ClassName = ClassName.get("me.lusory.ostrich.cmd", "CmdBuilder")
 
+val ACCESS_LEVEL: ClassName = ClassName.get("lombok", "AccessLevel")
+val SETTER_NONE: AnnotationSpec = AnnotationSpec.builder(SETTER.type as ClassName)
+    .addMember("value", "\$T.NONE", ACCESS_LEVEL)
+    .build()
 val ACCESSORS_FLUENT_CHAIN: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok.experimental", "Accessors"))
     .addMember("fluent", "true")
     .addMember("chain", "true")
@@ -29,6 +29,23 @@ fun String.formatRst(): String = trim() // remove redundant surrounding whitespa
     .replace("\n", "<br>\n") // emphasize line breaks
     .replace(CODE_REGEX) { result -> "<code>${result.groupValues[1]}</code>" } // code block markup
     .replace(ITALIC_REGEX) { result -> "<i>${result.groupValues[1]}</i>" } // italic markup
+
+fun <E> List<E>.split(delimiterElem: E): List<List<E>> {
+    val result: MutableList<List<E>> = mutableListOf()
+    var list: MutableList<E> = mutableListOf()
+
+    forEach { elem ->
+        if (elem == delimiterElem) {
+            result.add(list)
+            list = mutableListOf()
+        } else {
+            list.add(elem)
+        }
+    }
+    result.add(list)
+
+    return result
+}
 
 fun writeQemuImg(sourceDir: File, file: File, docFile: File) {
     val stubs: List<Stub> = stitchDocs(parseStubs(file), docFile, matchFully = false)
@@ -70,6 +87,12 @@ fun writeQemuImg(sourceDir: File, file: File, docFile: File) {
             .addAnnotation(ACCESSORS_FLUENT_CHAIN)
             .addJavadoc(doc)
 
+        val buildMethodBuilder: MethodSpec.Builder = MethodSpec.methodBuilder("build")
+            .addModifiers(Modifier.PUBLIC)
+            .returns(ArrayTypeName.of(java.lang.String::class.java))
+            .addAnnotation(OVERRIDE)
+            .addStatement("final \$T<String> result = new \$T<>()", java.util.List::class.java, java.util.ArrayList::class.java)
+
         val desc: String = stub.params[2]
             .replace("[+ | -]", "") // unnecessary
             .replace(VARARG_REGEX) { result -> "${result.groupValues[1]}_vararg" }
@@ -78,15 +101,159 @@ fun writeQemuImg(sourceDir: File, file: File, docFile: File) {
         val args: List<Any> = parseBrackets(desc)
             .toMutableList().apply { removeAt(0) } // pop command name
 
-        args.forEach { arg ->
-            val optional: Boolean = arg is List<*>
-            val isVararg: Boolean = (arg is List<*> && arg[0] == "VARARG") || (arg is String && arg.endsWith("_vararg"))
+        fun addNewRepeatableOption(argName: String, name: String) {
+            stubBuilder
+                .addField(
+                    FieldSpec.builder(TypeName.INT, name, Modifier.PRIVATE)
+                        .initializer("0")
+                        .addAnnotation(SETTER_NONE)
+                        .build()
+                )
+                .addMethod(
+                    MethodSpec.methodBuilder(name)
+                        .addModifiers(Modifier.PUBLIC)
+                        .returns(type)
+                        .addStatement("this.$name++")
+                        .addStatement("return this")
+                        .build()
+                )
 
-            // TODO: add fields
+            buildMethodBuilder.beginControlFlow("for (int i = 0; i < this.$name; i++)")
+                .addStatement("result.add(\$S)", argName)
+                .endControlFlow()
         }
 
-        stubBuilder.build().save(type)
+        fun addNewRepeatableOptionWithArg(argName: String, name: String, elem: String) {
+            stubBuilder
+                .addField(
+                    FieldSpec.builder(ParameterizedTypeName.get(LIST, STRING), name, Modifier.PRIVATE, Modifier.FINAL)
+                        .initializer("new \$T<>()", java.util.ArrayList::class.java)
+                        .build()
+                )
+                .addMethod(
+                    MethodSpec.methodBuilder(name)
+                        .addModifiers(Modifier.PUBLIC)
+                        .returns(type)
+                        .addParameter(java.lang.String::class.java, elem)
+                        .addStatement("this.$name.add($elem)")
+                        .addStatement("return this")
+                        .build()
+                )
+
+            buildMethodBuilder.beginControlFlow("for (final String value : this.$name)")
+                .addStatement("result.add(\$S)", argName)
+                .addStatement("result.add(value)")
+                .endControlFlow()
+        }
+
+        fun addNewOption(argName: String, name: String) {
+            stubBuilder
+                .addField(
+                    FieldSpec.builder(TypeName.BOOLEAN, name, Modifier.PRIVATE)
+                        .initializer("false")
+                        .build()
+                )
+                .addMethod(
+                    MethodSpec.methodBuilder(name)
+                        .addModifiers(Modifier.PUBLIC)
+                        .returns(type)
+                        .addStatement("this.$name = true")
+                        .addStatement("return this")
+                        .build()
+                )
+
+            buildMethodBuilder.beginControlFlow("if (this.$name)")
+                .addStatement("result.add(\$S)", argName)
+                .endControlFlow()
+        }
+
+        fun addNewOptionWithArg(argName: String, name: String, optional: Boolean = false, joined: Boolean = false) {
+            stubBuilder
+                .addField(
+                    FieldSpec.builder(java.lang.String::class.java, name, Modifier.PRIVATE)
+                        .apply {
+                            if (optional) {
+                                initializer("null")
+                                addAnnotation(NULLABLE)
+                            } else {
+                                addAnnotation(NOT_NULL)
+                            }
+                        }
+                        .build()
+                )
+
+            if (optional) {
+                buildMethodBuilder.beginControlFlow("if (this.$name != null)")
+            }
+
+            if (joined) {
+                buildMethodBuilder.addStatement("result.add(\$S + this.$name)", "$argName=")
+            } else {
+                buildMethodBuilder.addStatement("result.add(\$S)", argName)
+                    .addStatement("result.add(this.$name)")
+            }
+
+            if (optional) {
+                buildMethodBuilder.endControlFlow()
+            }
+        }
+
+        args.forEach { arg ->
+            if (arg is List<*>) { // optional or vararg
+                val arg0: MutableList<*> = arg.toMutableList()
+
+                if (arg0[0] == "VARARG") { // vararg
+                    arg0.removeAt(0) // pop vararg id
+                    val split: List<List<*>> = arg0.split("|")
+
+                    split.forEach { list ->
+                        val argName: String = list[0] as String
+                        val name: String = (if (argName.startsWith("--")) argName.drop(2) else argName.drop(1)).skewerToLowerCamelCase()
+
+                        if (list.size == 1) {
+                            addNewRepeatableOption(argName, name)
+                        } else {
+                            val elem: String = (list[1] as String).toLowerCase().skewerToLowerCamelCase()
+
+                            addNewRepeatableOptionWithArg(argName, name, elem)
+                        }
+                    }
+                } else { // optional
+                    val argElem: String = arg0[0] as String
+
+                    // TODO: account for ORs
+                    if (arg0.size == 1) {
+                        if ("=" in argElem) {
+                            val split: List<String> = argElem.split("=", limit = 2)
+                            val argName: String = split[0]
+                            val name: String = (if (argName.startsWith("--")) argName.drop(2) else argName.drop(1)).skewerToLowerCamelCase()
+
+                            addNewOptionWithArg(argName, name, optional = true, joined = true)
+                        } else {
+                            val name: String = (if (argElem.startsWith("--")) argElem.drop(2) else argElem.drop(1)).skewerToLowerCamelCase()
+
+                            addNewOption(argElem, name)
+                        }
+                    } else {
+                        val name: String = (if (argElem.startsWith("--")) argElem.drop(2) else argElem.drop(1)).skewerToLowerCamelCase()
+
+                        addNewOptionWithArg(argElem, name, optional = true)
+                    }
+                }
+            } else {
+                // TODO: required args + no name args
+            }
+        }
+
+        stubBuilder
+            .addMethod(
+                buildMethodBuilder.addStatement("return result.toArray(new String[0])")
+                    .build()
+            )
+            .build()
+            .save(type)
     }
 
-    builder.build().save(className)
+    builder.build()
+        .save(className)
 }
