@@ -148,8 +148,6 @@ fun splitArgs(args: List<*>): List<List<String>> {
     var current: MutableList<String> = mutableListOf()
     var foundOption = false
 
-    println(args0)
-
     while (args0.isNotEmpty()) {
         val elem: String = args0.removeFirst() as String
 
@@ -173,8 +171,6 @@ fun splitArgs(args: List<*>): List<List<String>> {
             result.add(listOf(elem))
         }
     }
-
-    println(result)
 
     return result
 }

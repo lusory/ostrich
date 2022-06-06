@@ -98,8 +98,7 @@ fun writeQemuImg(sourceDir: File, file: File, docFile: File) {
             .replace(VARARG_REGEX) { result -> "${result.groupValues[1]}_vararg" }
             .replace(GROUP_VARARG_REGEX) { result -> "[VARARG ${result.groupValues[1]}]" }
 
-        val args: List<Any> = parseBrackets(desc)
-            .toMutableList().apply { removeFirst() } // pop command name
+        val args: List<Any> = parseBrackets(desc).toMutableList().apply { removeFirst() } // pop command name
 
         fun addNewRepeatableOption(argName: String, name: String) {
             stubBuilder
@@ -167,7 +166,7 @@ fun writeQemuImg(sourceDir: File, file: File, docFile: File) {
                 .endControlFlow()
         }
 
-        fun addNewOptionWithArg(argName: String, name: String, optional: Boolean = false, joined: Boolean = false) {
+        fun addNewOptionWithArg(argName: String, name: String, arg: String? = null, optional: Boolean = false, joined: Boolean = false) {
             stubBuilder
                 .addField(
                     FieldSpec.builder(java.lang.String::class.java, name, Modifier.PRIVATE)
@@ -177,6 +176,9 @@ fun writeQemuImg(sourceDir: File, file: File, docFile: File) {
                                 addAnnotation(NULLABLE)
                             } else {
                                 addAnnotation(NOT_NULL)
+                            }
+                            if (arg != null) {
+                                addJavadoc(arg)
                             }
                         }
                         .build()
@@ -224,17 +226,43 @@ fun writeQemuImg(sourceDir: File, file: File, docFile: File) {
             }
         }
 
-        args.forEach { arg ->
-            if (arg is List<*>) { // optional or vararg
-                val arg0: MutableList<*> = arg.filter { it != "|" }.toMutableList()
+        fun addVarargPlainArg(name: String) {
+            stubBuilder
+                .addField(
+                    FieldSpec.builder(ParameterizedTypeName.get(LIST, STRING), name, Modifier.PRIVATE, Modifier.FINAL)
+                        .initializer("new \$T<>()", java.util.ArrayList::class.java)
+                        .build()
+                )
+                .addMethod(
+                    MethodSpec.methodBuilder(name)
+                        .addModifiers(Modifier.PUBLIC)
+                        .returns(type)
+                        .addParameter(java.lang.String::class.java, name)
+                        .addStatement("this.$name.add($name)")
+                        .addStatement("return this")
+                        .build()
+                )
 
-                if (arg0[0] == "VARARG") { // vararg
-                    arg0.removeFirst() // pop vararg id
-                    val split: List<List<*>> = arg0.split("|")
+            buildMethodBuilder.beginControlFlow("for (final String value : this.$name)")
+                .addStatement("result.add(value)")
+                .endControlFlow()
+        }
+
+        var skipNext = false
+        args.forEachIndexed { i, arg ->
+            if (skipNext) {
+                skipNext = false
+                return@forEachIndexed
+            }
+
+            if (arg is List<*>) { // optional or vararg
+                if (arg[0] == "VARARG") { // vararg
+                    // pop vararg id
+                    val split: List<List<*>> = arg.toMutableList().apply { removeFirst() }.split("|")
 
                     split.forEach { list ->
                         val argName: String = list[0] as String
-                        val name: String = (if (argName.startsWith("--")) argName.drop(2) else argName.drop(1)).skewerToLowerCamelCase()
+                        val name: String = (if (argName.startsWith("--")) argName.drop(2) else argName.drop(1)).skewerToLowerCamelCase().replaceReservedKeywords()
 
                         if (list.size == 1) {
                             addNewRepeatableOption(argName, name)
@@ -247,36 +275,62 @@ fun writeQemuImg(sourceDir: File, file: File, docFile: File) {
                 } else { // optional
                     fun parseArgs(arg1: List<*>) {
                         val argElem: String = arg1[0] as String
-                        
+
                         if (arg1.size == 1) {
                             if ('=' in argElem) {
                                 val split: List<String> = argElem.split('=', limit = 2)
                                 val argName: String = split[0]
-                                val name: String = (if (argName.startsWith('-')) (if (argName.startsWith("--")) argName.drop(2) else argName.drop(1)) else argName).skewerToLowerCamelCase()
+                                val name: String = (if (argName.startsWith('-')) (if (argName.startsWith("--")) argName.drop(2) else argName.drop(1)) else argName).skewerToLowerCamelCase().replaceReservedKeywords()
 
-                                addNewOptionWithArg(argName, name, optional = true, joined = true)
+                                addNewOptionWithArg(argName, name, arg = split[1], optional = true, joined = true)
                             } else {
-                                if (argElem.startsWith("-")) {
-                                    val name: String = (if (argElem.startsWith("--")) argElem.drop(2) else argElem.drop(1)).skewerToLowerCamelCase()
+                                if (argElem.startsWith('-')) {
+                                    val name: String = (if (argElem.startsWith("--")) argElem.drop(2) else argElem.drop(1)).skewerToLowerCamelCase().replaceReservedKeywords()
 
                                     addNewOptionWithArg(argElem, name, optional = true)
                                 } else {
-                                    addPlainArg(argElem.skewerToLowerCamelCase(), optional = true)
+                                    addPlainArg(argElem.skewerToLowerCamelCase().replaceReservedKeywords(), optional = true)
                                 }
                             }
                         } else if (arg1.size == 2) {
-                            val name: String = (if (argElem.startsWith("--")) argElem.drop(2) else argElem.drop(1)).skewerToLowerCamelCase()
+                            val name: String = (if (argElem.startsWith("--")) argElem.drop(2) else argElem.drop(1)).skewerToLowerCamelCase().replaceReservedKeywords()
 
-                            addNewOptionWithArg(argElem, name, optional = true)
+                            addNewOptionWithArg(argElem, name, arg = arg1[1] as? String, optional = true)
                         } else {
                             splitArgs(arg1).forEach { parseArgs(it) }
                         }
                     }
 
-                    parseArgs(arg0)
+                    parseArgs(arg.filter { it != "|" })
+                }
+            } else if (arg is String) {
+                if ('=' in arg) {
+                    val split: List<String> = arg.split('=', limit = 2)
+                    val argName: String = split[0]
+                    val name: String = (if (argName.startsWith('-')) (if (argName.startsWith("--")) argName.drop(2) else argName.drop(1)) else argName).skewerToLowerCamelCase().replaceReservedKeywords()
+
+                    addNewOptionWithArg(argName, name, arg = split[1], joined = true)
+                } else {
+                    if (arg.startsWith('-')) {
+                        val name: String = (if (arg.startsWith("--")) arg.drop(2) else arg.drop(1)).skewerToLowerCamelCase().replaceReservedKeywords()
+
+                        val nextItem: String? = args[i + 1] as? String
+                        if (nextItem?.startsWith('-') == true || nextItem?.contains('=') == true) { // is the next arg an option?
+                            addNewOption(arg, name)
+                        } else {
+                            addNewOptionWithArg(arg, name, arg = nextItem)
+                            skipNext = true
+                        }
+                    } else {
+                        if (arg.endsWith("_vararg")) {
+                            addVarargPlainArg(arg.replaceFirst("_vararg", "").skewerToLowerCamelCase().replaceReservedKeywords())
+                        } else {
+                            addPlainArg(arg.skewerToLowerCamelCase())
+                        }
+                    }
                 }
             } else {
-                // TODO: required args + no name args
+                error("Invalid argument type ${arg.javaClass.name}")
             }
         }
 
