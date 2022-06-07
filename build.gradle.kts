@@ -25,4 +25,17 @@ subprojects {
     addPublication()
 
     java.withJavadocJar()
+
+    configure<PublishingExtension> {
+        repositories {
+            maven {
+                url = if ((project.version as String).endsWith("-SNAPSHOT")) uri("https://repo.lusory.dev/snapshots")
+                    else uri("https://repo.lusory.dev/releases")
+                credentials {
+                    username = System.getenv("REPO_USERNAME")
+                    password = System.getenv("REPO_PASSWORD")
+                }
+            }
+        }
+    }
 }

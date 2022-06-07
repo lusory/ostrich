@@ -53,7 +53,7 @@ tasks.getByName<Javadoc>(JavaPlugin.JAVADOC_TASK_NAME) {
 }
 
 tasks.getByName("delombok") {
-    dependsOn("generateQapiModels")
+    dependsOn("generateQapiModels", "generateCommandWrappers")
 
     // manually replace reserved keywords in delombok output (OSTR-1)
     doLast {
