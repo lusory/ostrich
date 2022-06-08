@@ -25,6 +25,10 @@ val VAR_ASSIGN_REGEX = Regex("this.([a-zA-Z_0-9]+) = ([a-zA-Z_0-9]+);")
 val CTOR_PARAM_REGEX = Regex("final ([a-zA-Z_0-9]+) ([a-zA-Z_0-9]+)")
 val IF_REGEX = Regex("if \\(([a-zA-Z_0-9]+) == null\\) \\{")
 
+lombok {
+    disableConfig.set(true)
+}
+
 sourceSets.main {
     java {
         srcDir(generatedSourceDir)
@@ -73,6 +77,10 @@ tasks.getByName("delombok") {
             }
         }
     }
+}
+
+tasks.withType<JavaCompile> {
+    dependsOn("generateQapiModels", "generateCommandWrappers")
 }
 
 tasks.register("pullQemuSources") {
