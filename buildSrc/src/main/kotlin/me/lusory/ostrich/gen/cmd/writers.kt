@@ -92,6 +92,7 @@ fun writeQemuImg(sourceDir: File, file: File, docFile: File) {
             .returns(ArrayTypeName.of(java.lang.String::class.java))
             .addAnnotation(OVERRIDE)
             .addStatement("final \$T<String> result = new \$T<>()", java.util.List::class.java, java.util.ArrayList::class.java)
+            .addStatement("result.add(\$S)", stub.params[0])
 
         val desc: String = stub.params[2]
             .replace("[+ | -]", "") // unnecessary
@@ -345,4 +346,15 @@ fun writeQemuImg(sourceDir: File, file: File, docFile: File) {
 
     builder.build()
         .save(className)
+}
+
+fun writeQemuSystem(sourceDir: File, file: File) {
+    val stubs: List<Stub> = parseStubs(file)
+
+    stubs.forEach { stub ->
+        val optionName: String = stub.params[0]
+        val hasArg: Boolean = stub.params[1] == "HAS_ARG"
+
+        println("Option $optionName, has arg: $hasArg")
+    }
 }

@@ -1,6 +1,7 @@
 @file:Suppress("PropertyName")
 
 import me.lusory.ostrich.gen.cmd.writeQemuImg
+import me.lusory.ostrich.gen.cmd.writeQemuSystem
 import me.lusory.ostrich.gen.qapi.QAPIWriterContext
 import me.lusory.ostrich.gen.qapi.makeQapiWriterContext
 import me.lusory.ostrich.gen.qapi.model.*
@@ -171,6 +172,10 @@ tasks.register("generateCommandWrappers") {
             generatedSourceDir,
             sourcesWorkingDir.resolve("qemu-img-cmds.hx"),
             sourcesWorkingDir.resolve("docs/tools/qemu-img.rst")
+        )
+        writeQemuSystem(
+            generatedSourceDir,
+            sourcesWorkingDir.resolve("qemu-options.hx")
         )
     }
 }
