@@ -22,13 +22,43 @@ val ITALIC_REGEX: Regex = Regex("\\*([^*\n]+)\\*")
 val VARARG_REGEX: Regex = Regex("([a-zA-Z0-9-_]+) \\[\\12 \\[...\\]\\]")
 val GROUP_VARARG_REGEX: Regex = Regex("\\((.+)\\)\\.\\.\\.")
 
-fun String.formatRst(): String = trim() // remove redundant surrounding whitespace
-    .replace("\$", "\$\$") // escape dollar signs to not confuse javapoet
-    .replace("<", "&lt;") // escape html
-    .replace(">", "&gt;") // escape html
-    .replace("\n", "<br>\n") // emphasize line breaks
-    .replace(CODE_REGEX) { result -> "<code>${result.groupValues[1]}</code>" } // code block markup
-    .replace(ITALIC_REGEX) { result -> "<i>${result.groupValues[1]}</i>" } // italic markup
+fun String.formatRst(): String {
+    val lines: MutableList<String> = split("\n").toMutableList()
+    var indentSize = 0
+    var counting = false
+
+    lines.mapIndexedNotNull { i, line ->
+        if (counting) {
+            if (indentSize == line.countIndent()) {
+                return@mapIndexedNotNull line
+            } else {
+                counting = false
+                return@mapIndexedNotNull " ".repeat(line.countIndent()) + "</code>"
+            }
+        }
+
+        val trimmed: String = line.trim()
+
+        if (trimmed == ".. parsed-literal::" || trimmed == "::") {
+            counting = true
+            indentSize = if (lines.size <= (i + 1)) line.countIndent() else lines[i + 1].countIndent()
+
+            return@mapIndexedNotNull " ".repeat(line.countIndent()) + "<code>"
+        }
+
+        return@mapIndexedNotNull line
+    }
+
+    return lines.joinToString("\n").trim() // remove redundant surrounding whitespace
+        .replace("\$", "\$\$") // escape dollar signs to not confuse javapoet
+        .replace("<", "&lt;") // escape html
+        .replace(">", "&gt;") // escape html
+        .replace("\n", "<br>\n") // emphasize line breaks
+        .replace(CODE_REGEX) { result -> "<code>${result.groupValues[1]}</code>" } // code block markup
+        .replace(ITALIC_REGEX) { result -> "<i>${result.groupValues[1]}</i>" } // italic markup
+}
+
+fun String.countIndent(): Int = takeWhile { it.isWhitespace() }.count()
 
 fun <E> List<E>.split(delimiterElem: E): List<List<E>> {
     val result: MutableList<List<E>> = mutableListOf()
@@ -351,10 +381,89 @@ fun writeQemuImg(sourceDir: File, file: File, docFile: File) {
 fun writeQemuSystem(sourceDir: File, file: File) {
     val stubs: List<Stub> = parseStubs(file)
 
+    val className: ClassName = ClassName.get("me.lusory.ostrich.cmd", "MachineBuilder")
+    val builder: TypeSpec.Builder = TypeSpec.classBuilder(className)
+        .addModifiers(Modifier.PUBLIC)
+        .addSuperinterface(CMD_BUILDER)
+        .addAnnotation(GETTER)
+        .addAnnotation(SETTER)
+        .addAnnotation(NO_ARGS_CTOR)
+        .addAnnotation(TO_STRING)
+        .addAnnotation(EQUALS_AND_HASH_CODE)
+        .addAnnotation(ACCESSORS_FLUENT_CHAIN)
+
+    val buildMethodBuilder: MethodSpec.Builder = MethodSpec.methodBuilder("build")
+        .addModifiers(Modifier.PUBLIC)
+        .returns(ArrayTypeName.of(java.lang.String::class.java))
+        .addAnnotation(OVERRIDE)
+        .addStatement("final \$T<String> result = new \$T<>()", java.util.List::class.java, java.util.ArrayList::class.java)
+
+    fun TypeSpec.save(type: ClassName) {
+        JavaFile.builder(type.packageName(), this)
+            .addFileComment("This file was generated with ostrich. Do not edit, changes will be overwritten!")
+            .skipJavaLangImports(true)
+            .indent("    ") // 4 space indent
+            .build()
+            .writeTo(sourceDir)
+    }
+
     stubs.forEach { stub ->
         val optionName: String = stub.params[0]
-        val hasArg: Boolean = stub.params[1] == "HAS_ARG"
+        val name: String = optionName.skewerToLowerCamelCase().replaceReservedKeywords()
 
-        println("Option $optionName, has arg: $hasArg")
+        val rawOptionName: String = (if (stub.params[3].startsWith("--")) "--" else "-") + optionName
+
+        if (stub.params[1] == "HAS_ARG") {
+            builder
+                .addField(
+                    FieldSpec.builder(ParameterizedTypeName.get(LIST, ArrayTypeName.of(java.lang.String::class.java)), name, Modifier.PRIVATE, Modifier.FINAL)
+                        .initializer("new \$T<>()", java.util.ArrayList::class.java)
+                        .build()
+                )
+                .addMethod(
+                    MethodSpec.methodBuilder(name)
+                        .addModifiers(Modifier.PUBLIC)
+                        .returns(className)
+                        .addParameter(ArrayTypeName.of(java.lang.String::class.java), name)
+                        .varargs()
+                        .addStatement("this.$name.add($name)")
+                        .addStatement("return this")
+                        .addJavadoc(stub.rst.formatRst())
+                        .build()
+                )
+
+            buildMethodBuilder.beginControlFlow("for (final String[] values : this.$name)")
+                .addStatement("result.add(\$S)", rawOptionName)
+                .addStatement("result.addAll(\$T.asList(values))", java.util.Arrays::class.java)
+                .endControlFlow()
+        } else {
+            builder
+                .addField(
+                    FieldSpec.builder(TypeName.BOOLEAN, name, Modifier.PRIVATE)
+                        .initializer("false")
+                        .build()
+                )
+                .addMethod(
+                    MethodSpec.methodBuilder(name)
+                        .addModifiers(Modifier.PUBLIC)
+                        .returns(className)
+                        .addStatement("this.$name = true")
+                        .addStatement("return this")
+                        .addJavadoc(stub.rst.formatRst())
+                        .build()
+                )
+
+            buildMethodBuilder.beginControlFlow("if (this.$name)")
+                .addStatement("result.add(\$S)", rawOptionName)
+                .endControlFlow()
+        }
     }
+
+    builder
+        .addMethod(
+            buildMethodBuilder.addStatement("return result.toArray(new String[0])")
+                .build()
+        )
+        .build()
+        .save(className)
 }
