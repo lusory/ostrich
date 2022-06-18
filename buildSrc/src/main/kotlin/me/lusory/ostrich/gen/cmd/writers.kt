@@ -23,36 +23,47 @@ val VARARG_REGEX: Regex = Regex("([a-zA-Z0-9-_]+) \\[\\12 \\[...\\]\\]")
 val GROUP_VARARG_REGEX: Regex = Regex("\\((.+)\\)\\.\\.\\.")
 
 fun String.formatRst(): String {
-    val lines: MutableList<String> = split("\n").toMutableList()
-    var indentSize = 0
-    var counting = false
+    val lines: List<String> = trim() // remove redundant surrounding whitespace
+        .replace("<", "&lt;") // escape html
+        .replace(">", "&gt;") // escape html
+        .split("\r\n", "\n")
 
-    lines.mapIndexedNotNull { i, line ->
-        if (counting) {
-            if (indentSize == line.countIndent()) {
+    var indentSize = -1
+
+    return lines.mapIndexedNotNull { i, line ->
+        if (indentSize != -1) {
+            if (indentSize == line.countIndent() || line.trim().isEmpty()) {
                 return@mapIndexedNotNull line
             } else {
-                counting = false
+                indentSize = -1
                 return@mapIndexedNotNull " ".repeat(line.countIndent()) + "</code>"
             }
         }
 
         val trimmed: String = line.trim()
 
-        if (trimmed == ".. parsed-literal::" || trimmed == "::") {
-            counting = true
-            indentSize = if (lines.size <= (i + 1)) line.countIndent() else lines[i + 1].countIndent()
+        if (trimmed == ".. parsed-literal::" || trimmed == "..parsed-literal::" || trimmed == "::") {
+            fun pickLine(): String? {
+                for (x: Int in (i + 1) until lines.size) {
+                    val result: String = lines[x]
+                    if (result.trim().isNotEmpty()) {
+                        return result
+                    }
+                }
+                return null
+            }
+
+            println("Found good line ${pickLine()} with indent ${pickLine()?.countIndent()}")
+
+            indentSize = pickLine()?.countIndent() ?: return@mapIndexedNotNull null
 
             return@mapIndexedNotNull " ".repeat(line.countIndent()) + "<code>"
         }
 
         return@mapIndexedNotNull line
     }
-
-    return lines.joinToString("\n").trim() // remove redundant surrounding whitespace
+        .joinToString("\n")
         .replace("\$", "\$\$") // escape dollar signs to not confuse javapoet
-        .replace("<", "&lt;") // escape html
-        .replace(">", "&gt;") // escape html
         .replace("\n", "<br>\n") // emphasize line breaks
         .replace(CODE_REGEX) { result -> "<code>${result.groupValues[1]}</code>" } // code block markup
         .replace(ITALIC_REGEX) { result -> "<i>${result.groupValues[1]}</i>" } // italic markup
