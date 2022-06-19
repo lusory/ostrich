@@ -420,7 +420,6 @@ fun writeQemuSystem(sourceDir: File, file: File) {
         val optionName: String = stub.params[0]
         val name: String = optionName.skewerToLowerCamelCase().replaceReservedKeywords()
 
-        println(stub.params[3])
         val rawOptionName: String = (if (stub.params[3].startsWith("--")) "--" else "-") + optionName
 
         if (stub.params[1] == "HAS_ARG") {
