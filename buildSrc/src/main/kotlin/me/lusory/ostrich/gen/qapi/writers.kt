@@ -432,7 +432,7 @@ data class QAPIWriterContext(
                 .addAnnotation(DATA_OF)
                 .writeCondition(entry.value.`if`)
                 .writeRawName(entry.key)
-                .addField(entry.value.type.toTypeName(), "value", Modifier.PRIVATE)
+                .addField(entry.value.type.toTypeName().box(), "value", Modifier.PRIVATE)
                 .build()
                 .save(alternateImplName)
         }
