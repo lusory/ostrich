@@ -36,6 +36,9 @@ fun parseStubs(file: File): List<Stub> = STUB_REGEX.findAll(file.readText()).map
             builder.setLength(0)
             skipNext = true
         } else {
+            if ((builder.length == 0 || builder.all { it.isWhitespace() }) && c == '\\') {
+                continue
+            }
             builder.append(c)
         }
     }

@@ -36,7 +36,7 @@ fun String.formatRst(): String {
                 return@mapIndexedNotNull line
             } else {
                 indentSize = -1
-                return@mapIndexedNotNull " ".repeat(line.countIndent()) + "</code>"
+                return@mapIndexedNotNull "</code>" + line
             }
         }
 
@@ -52,8 +52,6 @@ fun String.formatRst(): String {
                 }
                 return null
             }
-
-            println("Found good line ${pickLine()} with indent ${pickLine()?.countIndent()}")
 
             indentSize = pickLine()?.countIndent() ?: return@mapIndexedNotNull null
 
@@ -422,6 +420,7 @@ fun writeQemuSystem(sourceDir: File, file: File) {
         val optionName: String = stub.params[0]
         val name: String = optionName.skewerToLowerCamelCase().replaceReservedKeywords()
 
+        println(stub.params[3])
         val rawOptionName: String = (if (stub.params[3].startsWith("--")) "--" else "-") + optionName
 
         if (stub.params[1] == "HAS_ARG") {
