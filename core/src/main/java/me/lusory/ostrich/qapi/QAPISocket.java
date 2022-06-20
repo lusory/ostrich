@@ -19,7 +19,7 @@ public abstract class QAPISocket extends Socket {
     protected static final ObjectMapper MAPPER = new ObjectMapper();
     protected final BufferedReader input;
     protected final Writer output;
-    protected final Thread readLoop;
+    protected final Thread readThread;
     protected final BlockingQueue<JsonNode> readQueue = new ArrayBlockingQueue<>(1);
 
     {
@@ -51,7 +51,7 @@ public abstract class QAPISocket extends Socket {
         }
 
         // set up the reading loop
-        readLoop = new Thread(() -> {
+        readThread = new Thread(() -> {
             while (!isClosed()) {
                 try {
                     final JsonNode value = MAPPER.readTree(read0());
@@ -67,7 +67,7 @@ public abstract class QAPISocket extends Socket {
             }
         });
 
-        readLoop.start();
+        readThread.start();
     }
 
     protected abstract @Nullable QmpCapabilitiesCommand.Data negotiate(QMPGreeting greeting);

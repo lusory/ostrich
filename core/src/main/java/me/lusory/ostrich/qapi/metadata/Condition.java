@@ -9,6 +9,31 @@ import java.util.stream.Collectors;
 
 // https://www.qemu.org/docs/master/devel/qapi-code-gen.html#configuring-the-schema
 public interface Condition {
+    Function<String, List<String>> CONDITION_LIST_PARSER = value -> {
+        final List<String> conditions = new ArrayList<>();
+        final StringBuilder builder = new StringBuilder();
+        boolean countingNested = false;
+
+        for (final char c : value.toCharArray()) {
+            if (countingNested) {
+                builder.append(c);
+                if (c == ']') {
+                    countingNested = false;
+                }
+                continue;
+            }
+            if (c == '[') {
+                countingNested = true;
+            } else if (c == ',') {
+                conditions.add(builder.toString());
+                builder.setLength(0);
+                continue;
+            }
+            builder.append(c);
+        }
+        return conditions;
+    };
+
     static DefaultCondition of(@NotNull String value) {
         return new DefaultCondition(value);
     }
@@ -28,31 +53,6 @@ public interface Condition {
     static Condition parse(@NotNull String compact) {
         Preconditions.assertNotNull(compact, "compact must not be null");
 
-        final Function<String, List<String>> conditionListParser = value -> {
-            final List<String> conditions = new ArrayList<>();
-            final StringBuilder builder = new StringBuilder();
-            boolean countingNested = false;
-
-            for (final char c : value.toCharArray()) {
-                if (countingNested) {
-                    builder.append(c);
-                    if (c == ']') {
-                        countingNested = false;
-                    }
-                    continue;
-                }
-                if (c == '[') {
-                    countingNested = true;
-                } else if (c == ',') {
-                    conditions.add(builder.toString());
-                    builder.setLength(0);
-                    continue;
-                }
-                builder.append(c);
-            }
-            return conditions;
-        };
-
         final String type = compact.substring(0, compact.indexOf(':')).toLowerCase(Locale.ROOT);
         final String value = compact.substring(compact.indexOf(':') + 1);
         switch (type) {
@@ -62,13 +62,13 @@ public interface Condition {
                 return new NotCondition(value);
             case "all":
                 return new AllCondition(Collections.unmodifiableList(
-                        conditionListParser.apply(value).stream()
+                        CONDITION_LIST_PARSER.apply(value).stream()
                                 .map(Condition::parse)
                                 .collect(Collectors.toList())
                 ));
             case "any":
                 return new AnyCondition(Collections.unmodifiableList(
-                        conditionListParser.apply(value).stream()
+                        CONDITION_LIST_PARSER.apply(value).stream()
                                 .map(Condition::parse)
                                 .collect(Collectors.toList())
                 ));

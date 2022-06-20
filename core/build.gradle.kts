@@ -97,7 +97,7 @@ tasks.register("pullQemuSources") {
         exec {
             workingDir = sourcesWorkingDir
 
-            commandLine = listOf("git", "clone", "--branch", "v${version as String}", "--depth=1", "https://github.com/qemu/qemu.git", ".")
+            commandLine = listOf("git", "clone", "--branch", "v${(version as String).replace("-SNAPSHOT", "")}", "--depth=1", "https://github.com/qemu/qemu.git", ".")
         }
     }
 }
