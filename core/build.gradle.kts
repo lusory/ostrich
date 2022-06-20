@@ -124,7 +124,7 @@ tasks.register("generateQapiModels") {
         )
 
         val schemas: List<SchemaFile> = qapiWorkingDir.walkTopDown()
-            .filter { it.isFile }
+            .filter { it.isFile && it.extension == "json" }
             .map(::parseSchemaFile)
             .toList()
 
