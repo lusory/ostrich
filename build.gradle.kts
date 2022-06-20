@@ -8,7 +8,7 @@ plugins {
 
 allprojects {
     group = "me.lusory.ostrich"
-    version = "0.0.1-SNAPSHOT"
+    version = "7.0.0"
 }
 
 subprojects {
