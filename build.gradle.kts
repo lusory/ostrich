@@ -1,14 +1,14 @@
 import me.lusory.ostrich.gradle.addPublication
 
 plugins {
-    id("io.freefair.lombok") version "6.4.2" apply false
+    id("io.freefair.lombok") version "6.5.0.2" apply false
     `maven-publish`
     `java-library`
 }
 
 allprojects {
     group = "me.lusory.ostrich"
-    version = "7.0.0-SNAPSHOT"
+    version = "7.0.0"
 }
 
 subprojects {

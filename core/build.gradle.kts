@@ -123,10 +123,12 @@ tasks.register("generateQapiModels") {
             """.trimIndent()
         )
 
-        val schemas: List<SchemaFile> = qapiWorkingDir.walkTopDown()
+        val schemas: MutableList<SchemaFile> = qapiWorkingDir.walkTopDown()
             .filter { it.isFile && it.extension == "json" }
             .map(::parseSchemaFile)
-            .toList()
+            .toMutableList()
+
+        schemas.add(parseSchemaFile(sourcesWorkingDir.resolve("qga/qapi-schema.json"), name = "qga"))
 
         val context: QAPIWriterContext = makeQapiWriterContext(generatedSourceDir, schemas)
 

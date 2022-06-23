@@ -284,13 +284,13 @@ fun parseDocStrings(file: String): List<Pair<String, String?>> {
     return docStrings
 }
 
-fun parseSchemaFile(file: File): SchemaFile {
+fun parseSchemaFile(file: File, name: String = file.nameWithoutExtension): SchemaFile {
     val content: String = file.readText()
     val docStrings: List<Pair<String, String?>> = parseDocStrings(content)
-    val docStringResolver: (String) -> String? = { name -> docStrings.firstOrNull { it.first == name }?.second }
+    val docStringResolver: (String) -> String? = { name0 -> docStrings.firstOrNull { it.first == name0 }?.second }
 
     return SchemaFile(
-        name = file.nameWithoutExtension,
+        name,
         members = MAPPER.readValues(MAPPER.createParser(content), JsonNode::class.java).readAll()
             .map { node ->
                 val schemaType: SchemaType = parseSchemaType(node)
