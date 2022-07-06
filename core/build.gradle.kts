@@ -22,7 +22,7 @@ val sourcesWorkingDir: File = file("build/qemu")
 val qapiWorkingDir: File = file("build/qemu/qapi")
 val generatedSourceDir: File = file("build/generatedQemu/main/java")
 
-val VAR_ASSIGN_REGEX = Regex("this.([a-zA-Z_0-9]+) = ([a-zA-Z_0-9]+);")
+val VAR_ASSIGN_REGEX = Regex("this\\.([a-zA-Z_0-9]+) = ([a-zA-Z_0-9]+);")
 val CTOR_PARAM_REGEX = Regex("final ([a-zA-Z_0-9]+) ([a-zA-Z_0-9]+)")
 val IF_REGEX = Regex("if \\(([a-zA-Z_0-9]+) == null\\) \\{")
 
@@ -67,7 +67,16 @@ tasks.getByName("delombok") {
                 file.writeText(
                     file.readText()
                         .replace(CTOR_PARAM_REGEX) { result -> "final ${result.groupValues[1]} ${result.groupValues[2].replaceReservedKeywords()}" }
-                        .replace(VAR_ASSIGN_REGEX) { result -> "this.${result.groupValues[1]} = ${result.groupValues[2].replaceReservedKeywords()};" }
+                        .replace(VAR_ASSIGN_REGEX) { result ->
+                            "this.${result.groupValues[1]} = ${
+                                // don't sanitize booleans
+                                if (result.groupValues[2] == "true" || result.groupValues[2] == "false") {
+                                    result.groupValues[2]
+                                } else {
+                                    result.groupValues[2].replaceReservedKeywords()
+                                }
+                            };"
+                        }
                         .replace(IF_REGEX) { result -> "if (${result.groupValues[1].replaceReservedKeywords()} == null) {" }
                 )
             }
