@@ -29,4 +29,4 @@ dependencies {
 
 ## Compiling
 
-This library uses Gradle (Wrapper) to compile, so compiling is just as easy as running `gradlew shadowJar` in your terminal of choice. The built binary is placed in `./core/build/libs`.
+This library uses Gradle (Wrapper) to compile, so compiling is just as easy as running `gradlew build` in your terminal of choice. The built binary is placed in `./core/build/libs`.
