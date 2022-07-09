@@ -6,7 +6,7 @@ A Java library for interfacing with QEMU.
 
 ## Features
 
-* Generated QAPI schemas (includes QGA)
+* QAPI object POJOs generated from schemas (includes QGA)
 * [Base implementation](https://github.com/lusory/ostrich/blob/master/core/src/main/java/me/lusory/ostrich/qapi/QAPISocket.java) of a QAPI socket
 * Command-line wrappers of `qemu-system-*` and `qemu-img`
 
