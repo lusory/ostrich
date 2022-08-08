@@ -1,7 +1,7 @@
 import me.lusory.ostrich.gradle.addPublication
 
 plugins {
-    id("io.freefair.lombok") version "6.5.0.2" apply false
+    id("io.freefair.lombok") version "6.5.0.3" apply false
     `maven-publish`
     `java-library`
 }
