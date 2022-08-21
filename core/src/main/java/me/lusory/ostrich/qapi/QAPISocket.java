@@ -10,6 +10,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -22,7 +23,8 @@ public abstract class QAPISocket extends Socket {
     protected final Thread readThread;
     protected final BlockingQueue<JsonNode> readQueue = new ArrayBlockingQueue<>(1);
 
-    {
+    public QAPISocket(SocketAddress addr) throws IOException {
+        connect(addr);
         // prepare data streams for each direction
         try {
             this.input = new BufferedReader(new InputStreamReader(getInputStream(), StandardCharsets.ISO_8859_1));
