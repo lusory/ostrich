@@ -104,14 +104,17 @@ public abstract class QAPISocket extends Socket {
         write0(cmd);
 
         final JsonNode response = readQueue.take();
+        if (response.has("error")) {
+            throw new QAPIException(response.get("error").toString());
+        }
 
         final Command meta = cmd.getClass().getAnnotation(Command.class);
         if (meta.respondsWithArray()) {
             return MAPPER.treeToValue(
-                    response,
+                    response.get("return"),
                     MAPPER.getTypeFactory().constructCollectionLikeType(List.class, meta.responseType())
             );
         }
-        return (R) MAPPER.treeToValue(response, meta.responseType());
+        return (R) MAPPER.treeToValue(response.get("return"), meta.responseType());
     }
 }
