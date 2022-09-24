@@ -19,7 +19,7 @@ public enum Architecture {
     S390X,
     SPARC,
     SPARC64,
-    x86_64,
+    X86_64,
     XTENSA,
     XTENSAEB;
 
