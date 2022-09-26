@@ -6,6 +6,7 @@ import me.lusory.ostrich.qapi.control.QmpCapabilitiesCommand;
 import me.lusory.ostrich.qapi.exceptions.QAPIException;
 import me.lusory.ostrich.qapi.exceptions.QAPISocketException;
 import me.lusory.ostrich.qapi.metadata.annotations.Command;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
@@ -17,12 +18,14 @@ import java.util.concurrent.BlockingQueue;
 
 public class QAPISocket {
     protected static final ObjectMapper MAPPER = new ObjectMapper();
+    protected final Socket sock;
     protected final BufferedReader input;
     protected final Writer output;
     protected final Thread readThread;
     protected final BlockingQueue<JsonNode> readQueue = new ArrayBlockingQueue<>(1);
 
     public QAPISocket(Socket sock) {
+        this.sock = sock;
         if (!sock.isConnected() || sock.isClosed()) {
             throw new QAPISocketException("Socket is not connected");
         }
@@ -97,6 +100,10 @@ public class QAPISocket {
     }
 
     // public API below
+
+    public @NotNull Socket getSocket() {
+        return sock;
+    }
 
     @SuppressWarnings("unchecked")
     public synchronized <R> R sendCommand(QCommand<?, R> cmd) throws IOException, InterruptedException {
