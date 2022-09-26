@@ -10,25 +10,26 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
-public abstract class QAPISocket extends Socket {
+public class QAPISocket {
     protected static final ObjectMapper MAPPER = new ObjectMapper();
     protected final BufferedReader input;
     protected final Writer output;
     protected final Thread readThread;
     protected final BlockingQueue<JsonNode> readQueue = new ArrayBlockingQueue<>(1);
 
-    public QAPISocket(SocketAddress addr) throws IOException {
-        connect(addr);
+    public QAPISocket(Socket sock) {
+        if (!sock.isConnected() || sock.isClosed()) {
+            throw new QAPISocketException("Socket is not connected");
+        }
         // prepare data streams for each direction
         try {
-            this.input = new BufferedReader(new InputStreamReader(getInputStream(), StandardCharsets.ISO_8859_1));
-            this.output = new OutputStreamWriter(getOutputStream(), StandardCharsets.ISO_8859_1);
+            this.input = new BufferedReader(new InputStreamReader(sock.getInputStream(), StandardCharsets.ISO_8859_1));
+            this.output = new OutputStreamWriter(sock.getOutputStream(), StandardCharsets.ISO_8859_1);
         } catch (IOException e) {
             throw new QAPISocketException("Could not acquire a bidirectional connection", e);
         }
@@ -54,7 +55,7 @@ public abstract class QAPISocket extends Socket {
 
         // set up the reading loop
         readThread = new Thread(() -> {
-            while (!isClosed()) {
+            while (!sock.isClosed()) {
                 try {
                     final JsonNode value = MAPPER.readTree(read0());
 
@@ -71,10 +72,6 @@ public abstract class QAPISocket extends Socket {
 
         readThread.start();
     }
-
-    protected abstract @Nullable QmpCapabilitiesCommand.Data negotiate(QMPGreeting greeting);
-
-    protected abstract void handleEvent(QEvent<?> event);
 
     protected String read0() throws IOException {
         final String line = input.readLine();
@@ -99,6 +96,8 @@ public abstract class QAPISocket extends Socket {
         return (QEvent<?>) MAPPER.treeToValue(node, eventClass);
     }
 
+    // public API below
+
     @SuppressWarnings("unchecked")
     public synchronized <R> R sendCommand(QCommand<?, R> cmd) throws IOException, InterruptedException {
         write0(cmd);
@@ -116,5 +115,14 @@ public abstract class QAPISocket extends Socket {
             );
         }
         return (R) MAPPER.treeToValue(response.get("return"), meta.responseType());
+    }
+
+    // supposed to be overridden
+
+    protected @Nullable QmpCapabilitiesCommand.Data negotiate(QMPGreeting greeting) {
+        return null;
+    }
+
+    protected void handleEvent(QEvent<?> event) {
     }
 }
