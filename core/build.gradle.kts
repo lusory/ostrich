@@ -155,7 +155,9 @@ tasks.register("generateQapiModels") {
             }
         }
 
-        context.writeEventsMeta(schemas.flatMap { it.members }.filterIsInstance(Event::class.java))
+        val members: List<Schema> = schemas.flatMap { it.members }
+        context.writeMetaClass(members.filterIsInstance(Event::class.java), "Events")
+        context.writeMetaClass(members.filterIsInstance(Command::class.java), "Commands")
     }
 }
 

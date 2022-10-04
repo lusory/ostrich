@@ -6,9 +6,13 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.deser.ContextualDeserializer;
 import me.lusory.ostrich.qapi.QAlternate;
+import me.lusory.ostrich.qapi.metadata.annotations.Alternate;
+import me.lusory.ostrich.qapi.metadata.annotations.Alternative;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.List;
 
 public class QAlternateDeserializer extends JsonDeserializer<QAlternate> implements ContextualDeserializer {
     private Class<?> type;
@@ -27,20 +31,33 @@ public class QAlternateDeserializer extends JsonDeserializer<QAlternate> impleme
 
     @Override
     public QAlternate deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
-        try {
-            for (final Class<?> klass : (Class<?>[]) type.getField("TYPES").get(null)) {
-                try {
-                    final Object value = p.readValueAs(klass.getDeclaredField("value").getType());
+        if (type == null) {
+            throw new IOException("QAlternateDeserializer must always be contextual");
+        }
+        final Alternate alternate = type.getAnnotation(Alternate.class);
+        for (final Class<?> alternativeKlass : alternate.alternatives()) {
+            final Alternative alternative = alternativeKlass.getAnnotation(Alternative.class);
 
-                    return (QAlternate) klass.getDeclaredMethod("of", value.getClass()).invoke(null, value);
-                } catch (IOException ignored) {
-                    // ignored
-                } catch (NoSuchFieldException | NoSuchMethodException e) {
-                    throw new RuntimeException(e);
+            try {
+                Object value;
+                if (alternative.array()) {
+                    value = ctxt.readValue(
+                            p,
+                            ctxt.getTypeFactory().constructCollectionLikeType(List.class, alternative.type())
+                    );
+                } else {
+                    value = p.readValueAs(alternative.type());
                 }
+
+                final Constructor<?> ctor = alternativeKlass.getDeclaredConstructor(alternative.array() ? List.class : alternative.type());
+                ctor.setAccessible(true);
+
+                return (QAlternate) ctor.newInstance(value);
+            } catch (IOException ignored) {
+                // ignored
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                throw new RuntimeException(e);
             }
-        } catch (IllegalAccessException | NoSuchFieldException | InvocationTargetException e) {
-            throw new RuntimeException(e);
         }
         throw new RuntimeException("Could not deserialize " + p.getValueAsString() + " to " + type.getName());
     }

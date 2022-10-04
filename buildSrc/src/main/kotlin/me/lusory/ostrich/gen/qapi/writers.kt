@@ -89,6 +89,9 @@ val UNION_FEATURES: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.a
 val UNION_BRANCH_CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionBranchCondition")
 val COMMAND: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Command")
 val RAW_NAME: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "RawName")
+val ALTERNATE: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Alternate")
+val ALTERNATIVE: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Alternative")
+val EVENT: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Event")
 val LIST: ClassName = ClassName.get(java.util.List::class.java)
 val MAP: ClassName = ClassName.get(java.util.Map::class.java)
 val ENUM: ClassName = ClassName.get(java.lang.Enum::class.java)
@@ -429,6 +432,8 @@ data class QAPIWriterContext(
 
             types.add(alternateImplName)
 
+            val alternateValueType: TypeName = entry.value.type.toTypeName().box()
+
             TypeSpec.classBuilder(alternateImplName)
                 .addModifiers(Modifier.PUBLIC)
                 .addSuperinterface(className)
@@ -437,21 +442,32 @@ data class QAPIWriterContext(
                 .addAnnotation(EQUALS_AND_HASH_CODE)
                 .addAnnotation(GETTER)
                 .addAnnotation(SETTER)
+                .addAnnotation(
+                    AnnotationSpec.builder(ALTERNATIVE)
+                        .apply {
+                            if (alternateValueType is ParameterizedTypeName) {
+                                addMember("type", "\$T.class", alternateValueType.typeArguments[0])
+                                addMember("array", "true")
+                            } else {
+                                addMember("type", "\$T.class", alternateValueType)
+                            }
+                        }
+                        .build()
+                )
                 .writeCondition(entry.value.`if`)
                 .writeRawName(entry.key)
-                .addField(entry.value.type.toTypeName().box(), "value", Modifier.PRIVATE)
+                .addField(alternateValueType, "value", Modifier.PRIVATE)
                 .build()
                 .save(alternateImplName)
         }
 
-        builder.addField(
-            FieldSpec.builder(ArrayTypeName.of(CLASS_WILDCARD), "TYPES", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
-                .initializer(
-                    CodeBlock.builder()
-                        .add("new \$T[] { ", CLASS_WILDCARD)
-                        .add(CodeBlock.join(types.map { CodeBlock.of("\$T.class", it) }, ", "))
-                        .add(" }")
-                        .build()
+        builder.addAnnotation(
+            AnnotationSpec.builder(ALTERNATE)
+                .addMember(
+                    "alternatives",
+                    types.stream()
+                        .map { CodeBlock.of("\$T.class", it) }
+                        .collect(CodeBlock.joining(", ", "{ ", " }"))
                 )
                 .build()
         )
@@ -499,6 +515,11 @@ data class QAPIWriterContext(
 
         if (dataClassName != null) {
             builder.addField(dataClassName, "data", Modifier.PRIVATE)
+                .addAnnotation(
+                    AnnotationSpec.builder(EVENT)
+                        .addMember("value", "\$T.class", dataClassName)
+                        .build()
+                )
 
             if (event.data.first != null) {
                 builder
@@ -523,44 +544,6 @@ data class QAPIWriterContext(
         }
 
         builder.build().save(className)
-    }
-
-    fun writeEventsMeta(events: List<Event>) {
-        val className: ClassName = ClassName.get("me.lusory.ostrich.qapi", "Events")
-
-        TypeSpec.classBuilder(className)
-            .addModifiers(Modifier.PUBLIC)
-            .addAnnotation(UTILITY_CLASS)
-            .addField(
-                FieldSpec.builder(ParameterizedTypeName.get(MAP, STRING, CLASS_WILDCARD), "TYPES", Modifier.PUBLIC, Modifier.FINAL)
-                    .addAnnotation(UNMODIFIABLE)
-                    .initializer(
-                        CodeBlock.builder()
-                            .add("\$T.unmodifiableMap(new \$T<\$T, \$T>() {\n", Collections::class.java, java.util.HashMap::class.java, STRING, CLASS_WILDCARD)
-                            .indent()
-                            .add("{\n")
-                            .indent()
-                            .apply {
-                                events.forEach { event ->
-                                    val fullEventClassName: String = names[event.name] ?: error("Could not get class name for ${event.name}")
-                                    val eventClassName: ClassName = ClassName.get(
-                                        fullEventClassName.substringBeforeLast('.'),
-                                        fullEventClassName.substringAfterLast('.')
-                                    )
-
-                                    add("put(\$S, \$T.class);\n", event.name, eventClassName)
-                                }
-                            }
-                            .unindent()
-                            .add("}\n")
-                            .unindent()
-                            .add("})")
-                            .build()
-                    )
-                    .build()
-            )
-            .build()
-            .save(className)
     }
 
     fun writeCommand(command: Command) {
@@ -660,6 +643,44 @@ data class QAPIWriterContext(
         }
 
         builder.build().save(className)
+    }
+
+    fun writeMetaClass(schemas: List<NamedSchema>, classNameStr: String) {
+        val className: ClassName = ClassName.get("me.lusory.ostrich.qapi", classNameStr)
+
+        TypeSpec.classBuilder(className)
+            .addModifiers(Modifier.PUBLIC)
+            .addAnnotation(UTILITY_CLASS)
+            .addField(
+                FieldSpec.builder(ParameterizedTypeName.get(MAP, STRING, CLASS_WILDCARD), "TYPES", Modifier.PUBLIC, Modifier.FINAL)
+                    .addAnnotation(UNMODIFIABLE)
+                    .initializer(
+                        CodeBlock.builder()
+                            .add("\$T.unmodifiableMap(new \$T<\$T, \$T>() {\n", Collections::class.java, java.util.HashMap::class.java, STRING, CLASS_WILDCARD)
+                            .indent()
+                            .add("{\n")
+                            .indent()
+                            .apply {
+                                schemas.forEach { schema ->
+                                    val fullSchemaClassName: String = names[schema.name] ?: error("Could not get class name for ${schema.name}")
+                                    val schemaClassName: ClassName = ClassName.get(
+                                        fullSchemaClassName.substringBeforeLast('.'),
+                                        fullSchemaClassName.substringAfterLast('.')
+                                    )
+
+                                    add("put(\$S, \$T.class);\n", schema.name, schemaClassName)
+                                }
+                            }
+                            .unindent()
+                            .add("}\n")
+                            .unindent()
+                            .add("})")
+                            .build()
+                    )
+                    .build()
+            )
+            .build()
+            .save(className)
     }
 
     fun TypeSpec.save(className: ClassName) {

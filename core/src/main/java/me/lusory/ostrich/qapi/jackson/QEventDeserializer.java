@@ -7,9 +7,9 @@ import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.deser.ContextualDeserializer;
 import me.lusory.ostrich.qapi.QEvent;
+import me.lusory.ostrich.qapi.metadata.annotations.Event;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.time.Instant;
 
@@ -30,6 +30,9 @@ public class QEventDeserializer extends JsonDeserializer<QEvent<?>> implements C
 
     @Override
     public QEvent<?> deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+        if (type == null) {
+            throw new IOException("QEventDeserializer must always be contextual");
+        }
         final JsonNode node = p.readValueAsTree();
         final JsonNode timestampNode = node.get("timestamp");
 
@@ -38,20 +41,14 @@ public class QEventDeserializer extends JsonDeserializer<QEvent<?>> implements C
                 timestampNode.get("microseconds").asLong() * 1000
         );
 
-        Field field = null;
-        try {
-            field = type.getDeclaredField("data");
-        } catch (NoSuchFieldException ignored) {
-        }
-
-        if (field != null) {
+        final Event event = type.getAnnotation(Event.class);
+        if (event != null) {
             try {
-                final Class<?> dataType = field.getType();
-                final Object dataInstance = p.getCodec().treeToValue(node.get("data"), dataType);
+                final Object dataInstance = p.getCodec().treeToValue(node.get("data"), event.value());
 
-                return (QEvent<?>) type.getDeclaredConstructor(Instant.class, dataType)
+                return (QEvent<?>) type.getDeclaredConstructor(Instant.class, event.value())
                         .newInstance(timestamp, dataInstance);
-            } catch (NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
                 throw new RuntimeException(e);
             }
         }
