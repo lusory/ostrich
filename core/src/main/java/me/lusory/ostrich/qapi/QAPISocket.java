@@ -1,7 +1,6 @@
 package me.lusory.ostrich.qapi;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import me.lusory.ostrich.qapi.control.QmpCapabilitiesCommand;
 import me.lusory.ostrich.qapi.exceptions.QAPIException;
 import me.lusory.ostrich.qapi.exceptions.QAPISocketException;
@@ -16,8 +15,9 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
+import static me.lusory.ostrich.qapi.util.DeserializationUtils.MAPPER;
+
 public class QAPISocket {
-    protected static final ObjectMapper MAPPER = new ObjectMapper();
     protected final Socket sock;
     protected final BufferedReader input;
     protected final Writer output;

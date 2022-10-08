@@ -7,6 +7,7 @@ import java.io.File
 import javax.lang.model.element.Modifier
 
 val CMD_BUILDER: ClassName = ClassName.get("me.lusory.ostrich.cmd", "CmdBuilder")
+val ARCHITECTURE: ClassName = ClassName.get("me.lusory.ostrich.cmd", "Architecture")
 
 val ACCESS_LEVEL: ClassName = ClassName.get("lombok", "AccessLevel")
 val SETTER_NONE: AnnotationSpec = AnnotationSpec.builder(SETTER.type as ClassName)
@@ -93,6 +94,14 @@ fun writeQemuImg(sourceDir: File, file: File, docFile: File) {
     val builder: TypeSpec.Builder = TypeSpec.interfaceBuilder(className)
         .addModifiers(Modifier.PUBLIC)
         .addSuperinterface(CMD_BUILDER)
+        .addMethod(
+            MethodSpec.methodBuilder("start")
+                .addModifiers(Modifier.PUBLIC, Modifier.DEFAULT)
+                .returns(java.lang.Process::class.java)
+                .addException(java.io.IOException::class.java)
+                .addStatement("return start(\$S)", "qemu-img")
+                .build()
+        )
 
     fun TypeSpec.save(type: ClassName) {
         JavaFile.builder(type.packageName(), this)
@@ -400,6 +409,15 @@ fun writeQemuSystem(sourceDir: File, file: File) {
         .addAnnotation(TO_STRING)
         .addAnnotation(EQUALS_AND_HASH_CODE)
         .addAnnotation(ACCESSORS_FLUENT_CHAIN)
+        .addMethod(
+            MethodSpec.methodBuilder("start")
+                .addModifiers(Modifier.PUBLIC)
+                .returns(java.lang.Process::class.java)
+                .addParameter(ARCHITECTURE, "arch")
+                .addException(java.io.IOException::class.java)
+                .addStatement("return start(arch.getBinaryName())")
+                .build()
+        )
 
     val buildMethodBuilder: MethodSpec.Builder = MethodSpec.methodBuilder("build")
         .addModifiers(Modifier.PUBLIC)
