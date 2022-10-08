@@ -5,6 +5,7 @@ import me.lusory.ostrich.qapi.control.QmpCapabilitiesCommand;
 import me.lusory.ostrich.qapi.exceptions.QAPIException;
 import me.lusory.ostrich.qapi.exceptions.QAPISocketException;
 import me.lusory.ostrich.qapi.metadata.annotations.Command;
+import me.lusory.ostrich.qapi.util.DeserializationUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -14,8 +15,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-
-import static me.lusory.ostrich.qapi.util.DeserializationUtils.MAPPER;
 
 public class QAPISocket {
     protected final Socket sock;
@@ -38,7 +37,7 @@ public class QAPISocket {
         }
         try {
             // negotiate the capabilities
-            final QmpCapabilitiesCommand.Data data = negotiate(MAPPER.readValue(read0(), QMPGreeting.class));
+            final QmpCapabilitiesCommand.Data data = negotiate(DeserializationUtils.MAPPER.readValue(read0(), QMPGreeting.class));
             final QmpCapabilitiesCommand cmd = new QmpCapabilitiesCommand();
             if (data != null) {
                 cmd.setData(data);
@@ -48,7 +47,7 @@ public class QAPISocket {
             write0(cmd);
 
             // read the response, throw if an error occurred
-            final JsonNode response = MAPPER.readTree(read0());
+            final JsonNode response = DeserializationUtils.MAPPER.readTree(read0());
             if (response.has("error")) {
                 throw new QAPIException(response.get("error").toString());
             }
@@ -60,7 +59,7 @@ public class QAPISocket {
         readThread = new Thread(() -> {
             while (!sock.isClosed()) {
                 try {
-                    final JsonNode value = MAPPER.readTree(read0());
+                    final JsonNode value = DeserializationUtils.MAPPER.readTree(read0());
 
                     if (value.has("event")) {
                         handleEvent(deserializeEvent0(value));
@@ -85,7 +84,7 @@ public class QAPISocket {
     }
 
     protected void write0(Object value) throws IOException {
-        output.write(MAPPER.writeValueAsString(value));
+        output.write(DeserializationUtils.MAPPER.writeValueAsString(value));
         output.write("\n");
         output.flush();
     }
@@ -96,7 +95,7 @@ public class QAPISocket {
             throw new QAPIException("Unknown event " + node);
         }
 
-        return (QEvent<?>) MAPPER.treeToValue(node, eventClass);
+        return (QEvent<?>) DeserializationUtils.MAPPER.treeToValue(node, eventClass);
     }
 
     // public API below
@@ -116,12 +115,12 @@ public class QAPISocket {
 
         final Command meta = cmd.getClass().getAnnotation(Command.class);
         if (meta.respondsWithArray()) {
-            return MAPPER.treeToValue(
+            return DeserializationUtils.MAPPER.treeToValue(
                     response.get("return"),
-                    MAPPER.getTypeFactory().constructCollectionLikeType(List.class, meta.responseType())
+                    DeserializationUtils.MAPPER.getTypeFactory().constructCollectionLikeType(List.class, meta.responseType())
             );
         }
-        return (R) MAPPER.treeToValue(response.get("return"), meta.responseType());
+        return (R) DeserializationUtils.MAPPER.treeToValue(response.get("return"), meta.responseType());
     }
 
     // supposed to be overridden
