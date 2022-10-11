@@ -1,6 +1,7 @@
 package me.lusory.ostrich.gen.qapi
 
 import com.fasterxml.jackson.annotation.*
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.squareup.javapoet.*
 import me.lusory.ostrich.gen.qapi.model.*
 import java.io.File
@@ -84,9 +85,9 @@ val EMPTY_STRUCT: ClassName = ClassName.get("me.lusory.ostrich.qapi", "EmptyStru
 val CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Condition")
 val FEATURE: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Feature")
 val FEATURES: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Features")
-val UNION_CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionCondition")
-val UNION_FEATURES: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionFeatures")
-val UNION_BRANCH_CONDITION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionBranchCondition")
+val UNION: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Union")
+val UNION_BRANCH: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionBranch")
+val UNION_BRANCH_CONCRETE_IMPL: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "UnionBranchConcreteImpl")
 val COMMAND: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Command")
 val RAW_NAME: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "RawName")
 val ALTERNATE: ClassName = ClassName.get("me.lusory.ostrich.qapi.metadata.annotations", "Alternate")
@@ -109,6 +110,7 @@ val JSON_IGNORE: AnnotationSpec = AnnotationSpec.builder(JsonIgnore::class.java)
 val INCLUDE_ALWAYS: AnnotationSpec = AnnotationSpec.builder(JsonInclude::class.java).build()
 val JSON_ANY_GETTER: AnnotationSpec = AnnotationSpec.builder(JsonAnyGetter::class.java).build()
 val JSON_ANY_SETTER: AnnotationSpec = AnnotationSpec.builder(JsonAnySetter::class.java).build()
+val JSON_DESERIALIZE: AnnotationSpec = AnnotationSpec.builder(JsonDeserialize::class.java).build()
 
 val GETTER: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok", "Getter")).build()
 val SETTER: AnnotationSpec = AnnotationSpec.builder(ClassName.get("lombok", "Setter")).build()
@@ -319,8 +321,6 @@ data class QAPIWriterContext(
             .addAnnotation(NO_ARGS_CTOR)
             .addAnnotation(EQUALS_AND_HASH_CODE)
             .addAnnotation(TO_STRING)
-            .writeCondition(union.`if`, UNION_CONDITION)
-            .writeFeatures(union.features, UNION_FEATURES)
             .writeRawName(union.name)
             .addMethod(
                 MethodSpec.methodBuilder("getDiscriminator")
@@ -362,6 +362,8 @@ data class QAPIWriterContext(
             builder.addAnnotation(ALL_ARGS_CTOR)
         }
 
+        val concreteImpls: MutableList<Pair<TypeName, String>> = mutableListOf()
+
         union.data.forEach { entry ->
             val struct: Struct = structs[entry.value.type.type.second ?: throw IllegalStateException()]  ?: error("Could not get struct ${entry.value.type.type.second}")
 
@@ -375,7 +377,16 @@ data class QAPIWriterContext(
                 .addAnnotation(NO_ARGS_CTOR)
                 .addAnnotation(EQUALS_AND_HASH_CODE)
                 .addAnnotation(TO_STRING)
-                .writeCondition(entry.value.`if`, UNION_BRANCH_CONDITION)
+                .addAnnotation(JSON_DESERIALIZE) // resets QUnion-defined custom deserializer to default bean one, this is the impl after all
+                .addAnnotation(
+                    AnnotationSpec.builder(UNION_BRANCH)
+                        .apply {
+                            if (entry.value.`if` != null) {
+                                addMember("condition", "\$S", entry.value.`if`?.compact())
+                            }
+                        }
+                        .build()
+                )
                 .writeCondition(struct.`if`)
                 .writeFeatures(struct.features)
                 .writeRawName(struct.name)
@@ -397,10 +408,33 @@ data class QAPIWriterContext(
                 writeInnerStruct((structs[struct.base]  ?: error("Could not get struct ${struct.base}")).also { unionImplBuilder.addStringMethod("getStructName", it.name, isStatic = true) })
             }
 
+            concreteImpls.add(unionImplName to entry.key)
+
             unionImplBuilder.build().save(unionImplName)
         }
 
-        builder.build().save(className)
+        fun Pair<TypeName, String>.write(): AnnotationSpec = AnnotationSpec.builder(UNION_BRANCH_CONCRETE_IMPL)
+            .addMember("discriminator", "\$S", second)
+            .addMember("clazz", "\$T.class", first)
+            .build()
+
+        builder
+            .addAnnotation(
+                AnnotationSpec.builder(UNION)
+                    .apply {
+                        if (union.`if` != null) {
+                            addMember("condition", "\$S", union.`if`.compact())
+                        }
+                        if (union.features.isNotEmpty()) {
+                            addMember("features", "{ \$L }", union.features.stream().map { CodeBlock.of("\$L", it.write(FEATURE)) }.collect(CodeBlock.joining(", ")))
+                        }
+                    }
+                    .addMember("discriminator", "\$S", union.discriminator)
+                    .addMember("branches", "{ \$L }", concreteImpls.stream().map { CodeBlock.of("\$L", it.write()) }.collect(CodeBlock.joining(", ")))
+                    .build()
+            )
+            .build()
+            .save(className)
     }
 
     fun writeAlternate(alternate: Alternate) {

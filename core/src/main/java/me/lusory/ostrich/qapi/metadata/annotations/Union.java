@@ -5,8 +5,11 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Target({ ElementType.TYPE, ElementType.FIELD })
+@Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface UnionCondition {
-    String value();
+public @interface Union {
+    String condition() default "";
+    Feature[] features() default {};
+    String discriminator();
+    UnionBranchConcreteImpl[] branches();
 }

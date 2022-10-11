@@ -35,6 +35,9 @@ public class QAlternateDeserializer extends JsonDeserializer<QAlternate> impleme
             throw new IOException("QAlternateDeserializer must always be contextual");
         }
         final Alternate alternate = type.getAnnotation(Alternate.class);
+        if (alternate == null) {
+            throw new IOException("Invalid alternate target (" + type.getName() + "), missing @Alternate annotation");
+        }
         for (final Class<?> alternativeKlass : alternate.alternatives()) {
             final Alternative alternative = alternativeKlass.getAnnotation(Alternative.class);
 
@@ -46,7 +49,7 @@ public class QAlternateDeserializer extends JsonDeserializer<QAlternate> impleme
                             ctxt.getTypeFactory().constructCollectionLikeType(List.class, alternative.type())
                     );
                 } else {
-                    value = p.readValueAs(alternative.type());
+                    value = ctxt.readValue(p, alternative.type());
                 }
 
                 final Constructor<?> ctor = alternativeKlass.getDeclaredConstructor(alternative.array() ? List.class : alternative.type());
