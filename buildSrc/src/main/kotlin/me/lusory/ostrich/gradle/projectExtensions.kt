@@ -45,6 +45,7 @@ fun Project.addPublication() {
 fun Project.enableTests() {
     dependencies {
         add("testImplementation", "org.junit.jupiter:junit-jupiter-api:${DependencyVersions.JUNIT}")
+        add("testImplementation", "org.mockito:mockito-junit-jupiter:${DependencyVersions.MOCKITO}")
         add("testRuntimeOnly", "org.junit.jupiter:junit-jupiter-engine:${DependencyVersions.JUNIT}")
     }
 
