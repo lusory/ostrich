@@ -13,6 +13,7 @@ public enum Architecture {
     MIPS64,
     MIPS64EL,
     PPC64,
+    OR1K,
     RISCV64,
     RISCV32,
     RX,
